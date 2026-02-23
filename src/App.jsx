@@ -33,9 +33,9 @@ const LIGHT_T = {
 // ─── ROLE DEFINITIONS ──────────────────────────────────────
 const ROLES = {
   admin:        { label:"Administrator",    color:T.red,    icon:"👑", level:5,
-                  pages:["dashboard","rooms","restaurant","inventory","housekeeping","bookings","guests","reports","settings","bookingsPortal","giftShop","events","shuttle","staffSchedule","feedback","loyalty","payments","notifications","maintenance","tasks","auditLogs"] },
+                  pages:["dashboard","rooms","restaurant","inventory","housekeeping","bookings","guests","reports","settings","bookingsPortal","giftShop","events","shuttle","staffSchedule","feedback","loyalty","payments","notifications","maintenance","tasks","auditLogs","roomManagement","procurement"] },
   manager:      { label:"Manager",          color:T.orange, icon:"⭐", level:4,
-                  pages:["dashboard","rooms","restaurant","inventory","housekeeping","bookings","guests","reports","settings","bookingsPortal","giftShop","events","shuttle","staffSchedule","feedback","loyalty","payments","notifications","maintenance","tasks","auditLogs"] },
+                  pages:["dashboard","rooms","restaurant","inventory","housekeeping","bookings","guests","reports","settings","bookingsPortal","giftShop","events","shuttle","staffSchedule","feedback","loyalty","payments","notifications","maintenance","tasks","auditLogs","roomManagement","procurement"] },
   frontdesk:    { label:"Front Desk",       color:T.blue,   icon:"🖥️", level:3,
                   pages:["dashboard","rooms","bookings","guests","bookingsPortal","giftShop","shuttle","feedback","payments"] },
   restaurant:   { label:"Restaurant Staff", color:T.green,  icon:"🍽️", level:2,
@@ -1958,8 +1958,6 @@ function TasksPage({tasks, setTasks, addToast, currentUser, users}) {
     addToast("Task updated!");
   };
   
-  const myTasks = tasks.filter(t => t.assigneeName === currentUser.name);
-  
   return (
     <div>
       <SectionHead>Task Management</SectionHead>
@@ -1987,24 +1985,23 @@ function TasksPage({tasks, setTasks, addToast, currentUser, users}) {
         {tasks.map(t => (
           <Card key={t.id} style={{ padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ color: T.txt, fontWeight: "bold" }}>{t.title}</span>
-                <Badge color={t.priority === "high" ? T.red : t.priority === "medium" ? T.orange : T.muted}>{t.priority}</Badge>
-              </div>
-              {t.description && <div style={{ color: T.muted, fontSize: 12, marginBottom: 10 }}>{t.description}</div>}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ color: T.muted, fontSize: 11 }}>👤 {t.assigneeName} · Due: {t.dueDate || "No date"}</span>
-                <Badge color={t.status === "completed" ? T.green : t.status === "in_progress" ? T.blue : T.orange}>{t.status}</Badge>
-              </div>
-              <div style={{ display: "flex", gap: 5 }}>
-                {t.status === "pending" && <Btn sm color={T.blue} onClick={() => updateTask(t.id, "in_progress")}>Start</Btn>}
-                {t.status === "in_progress" && <Btn sm color={T.green} onClick={() => updateTask(t.id, "completed")}>Complete</Btn>}
-                {t.status === "completed" && <Btn sm color={T.orange} onClick={() => updateTask(t.id, "pending")}>Reopen</Btn>}
-              </div>
+              <span style={{ color: T.txt, fontWeight: "bold" }}>{t.title}</span>
+              <Badge color={t.priority === "high" ? T.red : t.priority === "medium" ? T.orange : T.muted}>{t.priority}</Badge>
+            </div>
+            {t.description && <div style={{ color: T.muted, fontSize: 12, marginBottom: 10 }}>{t.description}</div>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={{ color: T.muted, fontSize: 11 }}>👤 {t.assigneeName} · Due: {t.dueDate || "No date"}</span>
+              <Badge color={t.status === "completed" ? T.green : t.status === "in_progress" ? T.blue : T.orange}>{t.status}</Badge>
+            </div>
+            <div style={{ display: "flex", gap: 5 }}>
+              {t.status === "pending" && <Btn sm color={T.blue} onClick={() => updateTask(t.id, "in_progress")}>Start</Btn>}
+              {t.status === "in_progress" && <Btn sm color={T.green} onClick={() => updateTask(t.id, "completed")}>Complete</Btn>}
+              {t.status === "completed" && <Btn sm color={T.orange} onClick={() => updateTask(t.id, "pending")}>Reopen</Btn>}
+            </div>
           </Card>
         ))}
-          {tasks.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No tasks yet</div>}
-        </div>
-      )}
+        {tasks.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No tasks yet</div>}
+      </div>
       
       {modal === "add" && (
         <Modal onClose={() => setModal(null)} width={450}>
@@ -2366,224 +2363,194 @@ function SettingsPage({settings, onSave, currentUser, addToast, users: usersProp
 }
 
 // ═══════════════════════════════════════════════════════════
-//  INVENTORY PAGE
+//  PROCUREMENT PAGE
 // ═══════════════════════════════════════════════════════════
-function InventoryPage({currentUser,addToast}){
-  const [inv,setInv]=useState(()=>ls.get("hotel_inv",SEED_INVENTORY));
-  const [cat,setCat]=useState("all");
-  const [search,setSearch]=useState("");
-  const [sort,setSort]=useState("name");
-  const [modal,setModal]=useState(null); // add|edit|adjust|log
-  const [form,setForm]=useState({name:"",cat:"fb",unit:"piece",qty:0,min:5,cost:0,supplier:""});
-  const [adjItem,setAdjItem]=useState(null);
-  const [adjQty,setAdjQty]=useState("");
-  const [adjReason,setAdjReason]=useState("Restock");
-  const [editItem,setEditItem]=useState(null);
-  const [log,setLog]=useState(()=>ls.get("hotel_inv_log",[]));
+function ProcurementPage({inventory, addToast, currentUser}) {
+  const [tab, setTab] = useState("purchaseOrders");
+  const [orders, setOrders] = useState(() => ls.get("hotel_procurement_orders", []));
+  const [suppliers, setSuppliers] = useState(() => ls.get("hotel_suppliers", [
+    { id: 1, name: "Lagos Fresh Co.", contact: "+234 801 111 0001", email: "sales@lagosfresh.com", category: "Food & Beverage", rating: 4.5, status: "active" },
+    { id: 2, name: "Premium Meats", contact: "+234 801 111 0002", email: "orders@premiummeats.com", category: "Food & Beverage", rating: 4.8, status: "active" },
+    { id: 3, name: "Ocean Fresh", contact: "+234 801 111 0003", email: "supply@oceanfresh.com", category: "Seafood", rating: 4.2, status: "active" },
+    { id: 4, name: "Textile House", contact: "+234 801 111 0004", email: "orders@textilehouse.com", category: "Linen", rating: 4.0, status: "active" },
+    { id: 5, name: "Hygiene Pro", contact: "+234 801 111 0005", email: "sales@hygienepro.com", category: "Amenities", rating: 4.6, status: "active" },
+  ]));
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({ supplierId: "", items: "", notes: "", priority: "normal" });
 
-  const saveInv=u=>{setInv(u);ls.set("hotel_inv",u);};
-  const saveLog=u=>{setLog(u);ls.set("hotel_inv_log",u);};
+  const saveOrders = (o) => { setOrders(o); ls.set("hotel_procurement_orders", o); };
+  const saveSuppliers = (s) => { setSuppliers(s); ls.set("hotel_suppliers", s); };
 
-  const filtered=inv
-    .filter(i=>cat==="all"||i.cat===cat)
-    .filter(i=>!search||i.name.toLowerCase().includes(search.toLowerCase())||i.supplier.toLowerCase().includes(search.toLowerCase()))
-    .sort((a,b)=>sort==="qty"?a.qty-b.qty:sort==="low"?(a.qty/a.min)-(b.qty/b.min):a.name.localeCompare(b.name));
+  const lowStockItems = inventory.filter(i => i.qty <= i.min);
 
-  const lowStock=inv.filter(i=>i.qty<=i.min);
-  const totalVal=inv.reduce((s,i)=>s+i.qty*i.cost,0);
-
-  const handleSave=()=>{
-    if(!form.name||!form.supplier){addToast("Fill required fields","error");return;}
-    const item={...form,qty:+form.qty,min:+form.min,cost:+form.cost};
-    let u;
-    if(editItem){u=inv.map(i=>i.id===editItem.id?{...i,...item}:i);addToast("Item updated");}
-    else{u=[...inv,{...item,id:Date.now()}];addToast("Item added to inventory");}
-    saveInv(u);setModal(null);
+  const createOrder = () => {
+    if (!form.supplierId || !form.items) { addToast("Fill required fields", "error"); return; }
+    const supplier = suppliers.find(s => s.id === +form.supplierId);
+    const order = {
+      id: `PO-${Date.now().toString().slice(-6)}`,
+      supplierId: form.supplierId,
+      supplierName: supplier?.name,
+      items: form.items,
+      notes: form.notes,
+      priority: form.priority,
+      status: "pending",
+      totalEstimate: 0,
+      createdBy: currentUser.name,
+      createdAt: nowStr(),
+      updatedAt: nowStr()
+    };
+    saveOrders([order, ...orders]);
+    setModal(null);
+    setForm({ supplierId: "", items: "", notes: "", priority: "normal" });
+    addToast(`Purchase Order ${order.id} created!`);
   };
 
-  const handleAdj=()=>{
-    const n=+adjQty;
-    if(!adjQty||isNaN(n)){addToast("Enter a valid quantity","error");return;}
-    const u=inv.map(i=>i.id===adjItem.id?{...i,qty:Math.max(0,i.qty+n)}:i);
-    saveInv(u);
-    const entry={id:Date.now(),item:adjItem.name,change:n,reason:adjReason,newQty:Math.max(0,adjItem.qty+n),by:currentUser.name,at:nowStr()};
-    saveLog([entry,...log]);
-    addToast(`Stock adjusted: ${n>0?"+":""}${n} ${adjItem.unit}`);
-    setModal(null);setAdjQty("");
+  const updateOrderStatus = (id, status) => {
+    saveOrders(orders.map(o => o.id === id ? { ...o, status, updatedAt: nowStr() } : o));
+    addToast(`Order status updated to ${status}`);
   };
 
-  const openEdit=i=>{setEditItem(i);setForm({name:i.name,cat:i.cat,unit:i.unit,qty:i.qty,min:i.min,cost:i.cost,supplier:i.supplier});setModal("edit");};
-  const openAdj=i=>{setAdjItem(i);setAdjQty("");setAdjReason("Restock");setModal("adjust");};
-
-  const numInp={background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:7,color:T.txt,padding:"10px 14px",fontSize:13,width:"100%",outline:"none"};
+  const pendingOrders = orders.filter(o => o.status === "pending").length;
+  const approvedOrders = orders.filter(o => o.status === "approved").length;
 
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
-        <SectionHead style={{margin:0}}>Inventory Management</SectionHead>
-        <div style={{display:"flex",gap:8}}>
-          <Btn sm color={T.muted} onClick={()=>setModal("log")}>📋 Adj. Log</Btn>
-          <Btn sm color={T.green} onClick={()=>{setEditItem(null);setForm({name:"",cat:"fb",unit:"piece",qty:0,min:5,cost:0,supplier:""});setModal("add");}}>+ Add Item</Btn>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:13,marginBottom:20}}>
-        {[{l:"Total Items",v:inv.length,c:T.gold,i:"📦"},{l:"Low Stock",v:lowStock.length,c:lowStock.length?T.red:T.green,i:"⚠️"},{l:"Total Value",v:`$${totalVal.toFixed(0)}`,c:T.gold,i:"💰"},{l:"Categories",v:Object.keys(INV_CATS).length,c:T.blue,i:"🗂"}].map((s,i)=>(
-          <Card key={i} style={{padding:15,borderTop:`3px solid ${s.c}`}}>
-            <div style={{fontSize:20,marginBottom:5}}>{s.i}</div>
-            <div style={{fontSize:20,fontWeight:"bold",color:s.c}}>{s.v}</div>
-            <div style={{fontSize:11,color:T.muted,marginTop:2}}>{s.l}</div>
-          </Card>
+      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${T.bdr}`, marginBottom: 20, overflowX: "auto" }}>
+        {[{id:"purchaseOrders",label:"📋 Purchase Orders"},{id:"suppliers",label:"🏢 Suppliers"},{id:"receiving",label:"📦 Receiving"}].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={{ background: "none", border: "none", borderBottom: tab === t.id ? `2px solid ${T.gold}` : "2px solid transparent", color: tab === t.id ? T.gold : T.muted, padding: "10px 18px", cursor: "pointer", fontSize: 13, whiteSpace: "nowrap", transition: "all .15s", marginBottom: -1 }}>
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* Low stock alert */}
-      {lowStock.length>0&&(
-        <div style={{background:"#200e00",border:`1px solid ${T.orange}44`,borderRadius:9,padding:14,marginBottom:18}}>
-          <div style={{color:T.orange,fontSize:12,fontWeight:"bold",marginBottom:8}}>⚠️ LOW STOCK — {lowStock.length} item{lowStock.length>1?"s":""} need restocking</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
-            {lowStock.map(i=>(
-              <button key={i.id} onClick={()=>openAdj(i)} style={{background:T.s2,border:`1px solid ${T.orange}44`,color:T.orange,padding:"4px 10px",borderRadius:20,fontSize:11,cursor:"pointer"}}>
-                {i.name}: {i.qty}/{i.min} {i.unit}
-              </button>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+        <Card style={{ padding: 15, textAlign: "center" }}>
+          <div style={{ fontSize: 24, fontWeight: "bold", color: T.gold }}>{orders.length}</div>
+          <div style={{ color: T.muted, fontSize: 11 }}>Total Orders</div>
+        </Card>
+        <Card style={{ padding: 15, textAlign: "center" }}>
+          <div style={{ fontSize: 24, fontWeight: "bold", color: T.orange }}>{pendingOrders}</div>
+          <div style={{ color: T.muted, fontSize: 11 }}>Pending</div>
+        </Card>
+        <Card style={{ padding: 15, textAlign: "center" }}>
+          <div style={{ fontSize: 24, fontWeight: "bold", color: T.blue }}>{approvedOrders}</div>
+          <div style={{ color: T.muted, fontSize: 11 }}>Approved</div>
+        </Card>
+        <Card style={{ padding: 15, textAlign: "center" }}>
+          <div style={{ fontSize: 24, fontWeight: "bold", color: T.red }}>{lowStockItems.length}</div>
+          <div style={{ color: T.muted, fontSize: 11 }}>Low Stock Alerts</div>
+        </Card>
+      </div>
+
+      {lowStockItems.length > 0 && (
+        <div style={{ background: "#200e00", border: `1px solid ${T.orange}44`, borderRadius: 9, padding: 14, marginBottom: 18 }}>
+          <div style={{ color: T.orange, fontSize: 12, fontWeight: "bold", marginBottom: 8 }}>⚠️ LOW STOCK ALERT — {lowStockItems.length} items need reordering</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {lowStockItems.slice(0, 10).map(i => (
+              <span key={i.id} style={{ background: T.s2, border: `1px solid ${T.orange}44`, color: T.orange, padding: "4px 10px", borderRadius: 20, fontSize: 11 }}>
+                {i.name}: {i.qty}/{i.min}
+              </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search item or supplier…" style={{background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:7,color:T.txt,padding:"9px 13px",fontSize:13,width:220,outline:"none"}}/>
-        <select value={sort} onChange={e=>setSort(e.target.value)} style={{background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:7,color:T.txt,padding:"9px 12px",fontSize:13,outline:"none"}}>
-          <option value="name">Sort: A–Z</option><option value="qty">Sort: Quantity</option><option value="low">Sort: Low First</option>
-        </select>
-        <div style={{flex:1}}/>
-        <div style={{color:T.muted,fontSize:12}}>{filtered.length} items</div>
-      </div>
-
-      {/* Category Pills */}
-      <div style={{display:"flex",gap:7,marginBottom:18,flexWrap:"wrap"}}>
-        <button onClick={()=>setCat("all")} style={{background:cat==="all"?`${T.gold}22`:T.s2,border:`1px solid ${cat==="all"?T.gold:T.bdr}`,color:cat==="all"?T.gold:T.muted,padding:"6px 14px",borderRadius:20,cursor:"pointer",fontSize:12}}>All ({inv.length})</button>
-        {Object.entries(INV_CATS).map(([k,v])=>{
-          const cnt=inv.filter(i=>i.cat===k).length;
-          return <button key={k} onClick={()=>setCat(k)} style={{background:cat===k?`${v.color}22`:T.s2,border:`1px solid ${cat===k?v.color:T.bdr}`,color:cat===k?v.color:T.muted,padding:"6px 14px",borderRadius:20,cursor:"pointer",fontSize:12}}>{v.icon} {v.label} ({cnt})</button>;
-        })}
-      </div>
-
-      {/* Table */}
-      <Card style={{overflow:"hidden"}}>
-        <table style={{width:"100%",borderCollapse:"collapse"}}>
-          <thead>
-            <tr style={{background:T.s2}}>
-              {["Item Name","Category","Stock","Min","Cost/Unit","Value","Supplier","Status","Actions"].map(h=>(
-                <th key={h} style={{color:T.gold,fontSize:10,letterSpacing:1,padding:"11px 14px",textAlign:"left",borderBottom:`1px solid ${T.bdr}`,fontWeight:"normal"}}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(item=>{
-              const cv=INV_CATS[item.cat];
-              const isLow=item.qty<=item.min;
-              const pct=Math.min(100,(item.qty/Math.max(item.min*2,1))*100);
-              return (
-                <tr key={item.id} style={{borderBottom:`1px solid ${T.bdr}`}} onMouseEnter={e=>e.currentTarget.style.background=T.s2} onMouseLeave={e=>e.currentTarget.style.background=""}>
-                  <td style={{padding:"10px 14px",color:T.txt,fontSize:13}}>{item.name}</td>
-                  <td style={{padding:"10px 14px"}}><span style={{color:cv?.color,fontSize:12}}>{cv?.icon} {cv?.label}</span></td>
-                  <td style={{padding:"10px 14px"}}>
-                    <div style={{color:isLow?T.red:T.txt,fontWeight:isLow?"bold":"normal",fontSize:13}}>{item.qty} {item.unit}</div>
-                    <div style={{background:T.bg,borderRadius:3,height:4,width:80,marginTop:3}}><div style={{background:isLow?T.red:T.green,borderRadius:3,height:4,width:`${pct}%`}}/></div>
-                  </td>
-                  <td style={{padding:"10px 14px",color:T.muted,fontSize:13}}>{item.min}</td>
-                  <td style={{padding:"10px 14px",color:T.txt,fontSize:13}}>${item.cost.toFixed(2)}</td>
-                  <td style={{padding:"10px 14px",color:T.gold,fontWeight:"bold",fontSize:13}}>${(item.qty*item.cost).toFixed(2)}</td>
-                  <td style={{padding:"10px 14px",color:T.muted,fontSize:12}}>{item.supplier}</td>
-                  <td style={{padding:"10px 14px"}}><Badge color={isLow?T.red:T.green}>{isLow?"LOW":"OK"}</Badge></td>
-                  <td style={{padding:"10px 14px"}}>
-                    <div style={{display:"flex",gap:6}}>
-                      <Btn sm color={T.cyan} onClick={()=>openAdj(item)}>±Qty</Btn>
-                      <Btn sm color={T.gold} onClick={()=>openEdit(item)}>Edit</Btn>
-                      {currentUser.role==="admin"&&<Btn sm color={T.red} onClick={()=>{saveInv(inv.filter(i=>i.id!==item.id));addToast("Item deleted");}}>Del</Btn>}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length===0&&<div style={{color:T.muted,textAlign:"center",padding:40}}>No inventory items found</div>}
-      </Card>
-
-      {/* Add/Edit Modal */}
-      {(modal==="add"||modal==="edit")&&(
-        <Modal onClose={()=>setModal(null)} width={540}>
-          <ModalHeader title={modal==="add"?"Add Inventory Item":"Edit Item"} onClose={()=>setModal(null)}/>
-          <div style={{padding:24,display:"flex",flexDirection:"column",gap:14}}>
-            <Inp label="Item Name *" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="e.g. Bath Towel Large"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <Inp label="Category" value={form.cat} onChange={v=>setForm(f=>({...f,cat:v}))} options={Object.entries(INV_CATS).map(([k,v2])=>({value:k,label:`${v2.icon} ${v2.label}`}))}/>
-              <Inp label="Unit" value={form.unit} onChange={v=>setForm(f=>({...f,unit:v}))} options={["piece","kg","litre","set","pack","pair","tray","bottle","can","ream","bag","carton"]}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-              <div><div style={{color:T.muted,fontSize:10,letterSpacing:1.5,marginBottom:5}}>CURRENT QTY</div><input type="number" value={form.qty} onChange={e=>setForm(f=>({...f,qty:e.target.value}))} style={numInp} min={0}/></div>
-              <div><div style={{color:T.muted,fontSize:10,letterSpacing:1.5,marginBottom:5}}>MIN QTY</div><input type="number" value={form.min} onChange={e=>setForm(f=>({...f,min:e.target.value}))} style={numInp} min={0}/></div>
-              <div><div style={{color:T.muted,fontSize:10,letterSpacing:1.5,marginBottom:5}}>COST / UNIT ($)</div><input type="number" value={form.cost} onChange={e=>setForm(f=>({...f,cost:e.target.value}))} style={numInp} min={0} step={0.1}/></div>
-            </div>
-            <Inp label="Supplier *" value={form.supplier} onChange={v=>setForm(f=>({...f,supplier:v}))} placeholder="Supplier name"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:6}}>
-              <Btn color={T.muted} onClick={()=>setModal(null)} full ghost>Cancel</Btn>
-              <Btn color={T.green} onClick={handleSave} full>{modal==="add"?"Add Item":"Save Changes"}</Btn>
-            </div>
+      {tab === "purchaseOrders" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 15 }}>
+            <div style={{ color: T.muted }}>{orders.length} purchase orders</div>
+            <Btn color={T.green} onClick={() => setModal("newOrder")}>+ New Purchase Order</Btn>
           </div>
-        </Modal>
-      )}
-
-      {/* Adjust Modal */}
-      {modal==="adjust"&&adjItem&&(
-        <Modal onClose={()=>setModal(null)} width={420}>
-          <ModalHeader title="Adjust Stock" onClose={()=>setModal(null)}/>
-          <div style={{padding:24}}>
-            <div style={{background:T.s2,borderRadius:8,padding:14,marginBottom:18}}>
-              <div style={{color:T.txt,fontWeight:"bold",marginBottom:4}}>{adjItem.name}</div>
-              <div style={{color:T.muted,fontSize:13}}>Current: <span style={{color:adjItem.qty<=adjItem.min?T.red:T.green,fontWeight:"bold"}}>{adjItem.qty} {adjItem.unit}</span> &nbsp;·&nbsp; Min: {adjItem.min}</div>
-            </div>
-            <div style={{marginBottom:14}}>
-              <div style={{color:T.muted,fontSize:10,letterSpacing:1.5,marginBottom:5}}>QUANTITY CHANGE (+ add / − remove)</div>
-              <input type="number" value={adjQty} onChange={e=>setAdjQty(e.target.value)} placeholder="e.g.  20  or  -5" style={numInp}/>
-            </div>
-            <Inp label="Reason" value={adjReason} onChange={v=>setAdjReason(v)} options={["Restock","Room Usage","Kitchen Usage","Damaged / Spoiled","Transfer Out","Stock Count Correction","Theft / Loss","Other"]} style={{marginBottom:18}}/>
-            {adjQty&&!isNaN(+adjQty)&&(
-              <div style={{background:"#0a200a",borderRadius:8,padding:12,marginBottom:14,display:"flex",justifyContent:"space-between",fontSize:13}}>
-                <span style={{color:T.muted}}>New quantity will be:</span>
-                <span style={{color:T.gold,fontWeight:"bold"}}>{Math.max(0,adjItem.qty+(+adjQty))} {adjItem.unit}</span>
-              </div>
-            )}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <Btn color={T.muted} onClick={()=>setModal(null)} full ghost>Cancel</Btn>
-              <Btn color={T.gold} onClick={handleAdj} full>Apply Adjustment</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Log Modal */}
-      {modal==="log"&&(
-        <Modal onClose={()=>setModal(null)} width={600}>
-          <ModalHeader title="Stock Adjustment Log" onClose={()=>setModal(null)}/>
-          <div style={{padding:24,maxHeight:500,overflow:"auto"}}>
-            {log.length===0&&<div style={{color:T.muted,textAlign:"center",padding:40}}>No adjustments yet</div>}
-            {log.map(e=>(
-              <div key={e.id} style={{borderBottom:`1px solid ${T.bdr}`,paddingBottom:10,marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{color:T.txt,fontSize:13,fontWeight:"bold"}}>{e.item}</span>
-                  <span style={{color:e.change>0?T.green:T.red,fontSize:13,fontWeight:"bold"}}>{e.change>0?"+":""}{e.change}</span>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {orders.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No purchase orders yet</div>}
+            {orders.map(order => (
+              <Card key={order.id} style={{ padding: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ color: T.gold, fontWeight: "bold", fontSize: 14 }}>{order.id}</div>
+                    <div style={{ color: T.muted, fontSize: 12 }}>{order.supplierName}</div>
+                  </div>
+                  <Badge color={order.status === "pending" ? T.orange : order.status === "approved" ? T.blue : order.status === "received" ? T.green : T.muted}>{order.status.toUpperCase()}</Badge>
                 </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:T.muted}}>{e.reason} · by {e.by}</span>
-                  <span style={{color:T.muted}}>→ {e.newQty} units &nbsp;·&nbsp; {e.at}</span>
+                <div style={{ color: T.txt, fontSize: 13, marginBottom: 8 }}>{order.items}</div>
+                {order.notes && <div style={{ color: T.muted, fontSize: 12, marginBottom: 8 }}>Notes: {order.notes}</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ color: T.muted, fontSize: 11 }}>Created: {order.createdAt} by {order.createdBy}</div>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {order.status === "pending" && <Btn sm color={T.blue} onClick={() => updateOrderStatus(order.id, "approved")}>Approve</Btn>}
+                    {order.status === "approved" && <Btn sm color={T.green} onClick={() => updateOrderStatus(order.id, "received")}>Mark Received</Btn>}
+                  </div>
                 </div>
-              </div>
+              </Card>
             ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "suppliers" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 15 }}>
+            <div style={{ color: T.muted }}>{suppliers.filter(s => s.status === "active").length} active suppliers</div>
+            <Btn color={T.green} onClick={() => addToast("Add supplier feature coming soon")}>+ Add Supplier</Btn>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 15 }}>
+            {suppliers.filter(s => s.status === "active").map(supplier => (
+              <Card key={supplier.id} style={{ padding: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ color: T.txt, fontWeight: "bold", fontSize: 14 }}>{supplier.name}</div>
+                  <Badge color={T.green}>{supplier.category}</Badge>
+                </div>
+                <div style={{ color: T.muted, fontSize: 12, marginBottom: 5 }}>📞 {supplier.contact}</div>
+                <div style={{ color: T.muted, fontSize: 12, marginBottom: 10 }}>✉️ {supplier.email}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: T.gold }}>⭐ {supplier.rating}/5</span>
+                  <Btn sm color={T.gold} onClick={() => { setForm(f => ({ ...f, supplierId: supplier.id })); setModal("newOrder"); }}>Create PO</Btn>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "receiving" && (
+        <div>
+          <div style={{ color: T.muted, marginBottom: 15 }}>Receive and verify delivered orders</div>
+          {orders.filter(o => o.status === "approved" || o.status === "received").length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No orders to receive</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {orders.filter(o => o.status === "approved" || o.status === "received").map(order => (
+                <Card key={order.id} style={{ padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ color: T.gold, fontWeight: "bold" }}>{order.id}</div>
+                      <div style={{ color: T.muted, fontSize: 12 }}>{order.supplierName}</div>
+                    </div>
+                    <Badge color={order.status === "received" ? T.green : T.blue}>{order.status.toUpperCase()}</Badge>
+                  </div>
+                  <div style={{ color: T.txt, fontSize: 13 }}>{order.items}</div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {modal === "newOrder" && (
+        <Modal onClose={() => setModal(null)} width={500}>
+          <ModalHeader title="New Purchase Order" onClose={() => setModal(null)} />
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+            <Inp label="Supplier *" value={form.supplierId} onChange={v => setForm(f => ({ ...f, supplierId: v }))} options={[{ value: "", label: "Select supplier..." }, ...suppliers.map(s => ({ value: s.id, label: s.name }))]} />
+            <Inp label="Items to Order *" value={form.items} onChange={v => setForm(f => ({ ...f, items: v }))} placeholder="e.g. 20kg Rice, 50 trays Eggs" />
+            <Inp label="Priority" value={form.priority} onChange={v => setForm(f => ({ ...f, priority: v }))} options={[{ value: "low", label: "Low" }, { value: "normal", label: "Normal" }, { value: "high", label: "High" }, { value: "urgent", label: "Urgent" }]} />
+            <Inp label="Notes" value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Additional instructions..." />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Btn color={T.muted} onClick={() => setModal(null)} full ghost>Cancel</Btn>
+              <Btn color={T.green} onClick={createOrder} full>Create Order</Btn>
+            </div>
           </div>
         </Modal>
       )}
@@ -3578,8 +3545,10 @@ const handleRoomCharge = (roomNumber, charge) => {
   const NAV = [
     { id: "dashboard", icon: "◈", label: "Dashboard" },
     { id: "rooms", icon: "⊞", label: "Rooms" },
+    { id: "roomManagement", icon: "🏨", label: "Room Mgmt" },
     { id: "restaurant", icon: "🍽️", label: "Restaurant" },
     { id: "inventory", icon: "📦", label: "Inventory" },
+    { id: "procurement", icon: "🛒", label: "Procurement" },
     { id: "housekeeping", icon: "🧹", label: "Housekeeping" },
     { id: "bookings", icon: "📋", label: "Bookings" },
     { id: "bookingsPortal", icon: "🌐", label: "Online Booking" },
@@ -3997,9 +3966,159 @@ const handleRoomCharge = (roomNumber, charge) => {
             </div>
           )}
 
+          {/* ROOM MANAGEMENT */}
+          {view === "roomManagement" && (
+            <div>
+              <SectionHead>Room Management</SectionHead>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ color: T.muted, marginBottom: 10 }}>Create and manage hotel rooms, configure room types, and bulk operations</div>
+              </div>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+                <Card style={{ padding: 15, textAlign: "center" }}>
+                  <div style={{ fontSize: 24, fontWeight: "bold", color: T.gold }}>{rooms.length}</div>
+                  <div style={{ color: T.muted, fontSize: 11 }}>Total Rooms</div>
+                </Card>
+                {Object.entries(ROOM_TYPES).map(([k, v]) => (
+                  <Card key={k} style={{ padding: 15, textAlign: "center", borderTop: `3px solid ${v.color}` }}>
+                    <div style={{ fontSize: 20, fontWeight: "bold", color: v.color }}>{rooms.filter(r => r.type === k).length}</div>
+                    <div style={{ color: T.muted, fontSize: 11 }}>{v.label}</div>
+                  </Card>
+                ))}
+              </div>
+              
+              <Card style={{ padding: 20, marginBottom: 20 }}>
+                <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Room Type Configuration</div>
+                <div style={{ overflow: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: T.s2 }}>
+                        {["Type", "Price/Night", "Beds", "Max Guests", "Sq Ft", "Amenities", "Count"].map(h => (
+                          <th key={h} style={{ color: T.gold, fontSize: 10, padding: "10px 12px", textAlign: "left", borderBottom: `1px solid ${T.bdr}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(ROOM_TYPES).map(([k, v]) => (
+                        <tr key={k} style={{ borderBottom: `1px solid ${T.bdr}` }}>
+                          <td style={{ padding: "10px 12px", color: v.color, fontWeight: "bold" }}>{v.label}</td>
+                          <td style={{ padding: "10px 12px", color: T.gold }}>{settings.currency}{v.price}</td>
+                          <td style={{ padding: "10px 12px", color: T.txt }}>{v.beds}</td>
+                          <td style={{ padding: "10px 12px", color: T.txt }}>{v.maxGuests}</td>
+                          <td style={{ padding: "10px 12px", color: T.txt }}>{v.sqft} sqft</td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                              {v.amenities.slice(0, 3).map(a => (
+                                <span key={a} style={{ fontSize: 9, background: T.s2, padding: "2px 6px", borderRadius: 4 }}>{a}</span>
+                              ))}
+                              {v.amenities.length > 3 && <span style={{ fontSize: 9, color: T.muted }}>+{v.amenities.length - 3}</span>}
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 12px", color: T.txt, fontWeight: "bold" }}>{rooms.filter(r => r.type === k).length}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+              
+              <Card style={{ padding: 20, marginBottom: 20 }}>
+                <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Bulk Room Operations</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <Btn color={T.orange} onClick={() => {
+                    const maintenanceRooms = rooms.filter(r => r.status === "maintenance");
+                    if (maintenanceRooms.length === 0) {
+                      addToast("No rooms in maintenance");
+                      return;
+                    }
+                    saveRooms(rooms.map(r => r.status === "maintenance" ? { ...r, status: "available" } : r));
+                    addToast(`${maintenanceRooms.length} rooms set to available`);
+                  }}>🔧 Clear All Maintenance</Btn>
+                  <Btn color={T.blue} onClick={() => {
+                    const reservedRooms = rooms.filter(r => r.status === "reserved");
+                    if (reservedRooms.length === 0) {
+                      addToast("No reserved rooms");
+                      return;
+                    }
+                    saveRooms(rooms.map(r => r.status === "reserved" ? { ...r, status: "available" } : r));
+                    addToast(`${reservedRooms.length} reservations cleared`);
+                  }}>📌 Clear All Reservations</Btn>
+                  <Btn color={T.green} onClick={() => {
+                    addToast("Room data exported to console");
+                    console.log("Rooms Export:", JSON.stringify(rooms, null, 2));
+                  }}>📊 Export Room Data</Btn>
+                </div>
+              </Card>
+              
+              <Card style={{ padding: 20 }}>
+                <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Floor Overview</div>
+                {[1, 2, 3, 4, 5].map(floor => {
+                  const floorRooms = rooms.filter(r => r.floor === floor);
+                  const available = floorRooms.filter(r => r.status === "available").length;
+                  const occupied = floorRooms.filter(r => r.status === "occupied").length;
+                  const other = floorRooms.length - available - occupied;
+                  return (
+                    <div key={floor} style={{ display: "flex", alignItems: "center", gap: 15, padding: "10px 0", borderBottom: `1px solid ${T.bdr}` }}>
+                      <div style={{ width: 60, color: T.gold, fontWeight: "bold" }}>Floor {floor}</div>
+                      <div style={{ flex: 1, display: "flex", gap: 10 }}>
+                        <span style={{ color: T.green, fontSize: 12 }}>Available: {available}</span>
+                        <span style={{ color: T.red, fontSize: 12 }}>Occupied: {occupied}</span>
+                        <span style={{ color: T.muted, fontSize: 12 }}>Other: {other}</span>
+                      </div>
+                      <div style={{ background: T.bg, borderRadius: 4, height: 8, width: 150 }}>
+                        <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ background: T.green, width: `${(available / floorRooms.length) * 100}%`, height: 8 }} />
+                          <div style={{ background: T.red, width: `${(occupied / floorRooms.length) * 100}%`, height: 8 }} />
+                          <div style={{ background: T.muted, width: `${(other / floorRooms.length) * 100}%`, height: 8 }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+          )}
+
+          {/* PROCUREMENT */}
+          {view === "procurement" && (
+            <div>
+              <SectionHead>Procurement Management</SectionHead>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ color: T.muted }}>Manage purchase orders, suppliers, and procurement requests</div>
+              </div>
+              
+              <ProcurementPage 
+                inventory={ls.get("hotel_inv", SEED_INVENTORY)} 
+                addToast={addToast} 
+                currentUser={user}
+              />
+            </div>
+          )}
+
           {/* AUDIT LOGS */}
           {view === "auditLogs" && (
-            <AuditLogsPage logs={auditLogs} addToast={addToast} currentUser={user} />
+            <div>
+              <SectionHead>Audit Logs</SectionHead>
+              <Card style={{ padding: 20 }}>
+                <div style={{ color: T.muted, marginBottom: 15 }}>System activity and change tracking</div>
+                {auditLogs.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No audit logs yet</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {auditLogs.slice(0, 50).map(log => (
+                      <div key={log.id} style={{ background: T.s2, borderRadius: 7, padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ color: T.gold, fontSize: 13, fontWeight: "bold" }}>{log.action}</span>
+                          <span style={{ color: T.muted, fontSize: 11 }}>{log.at}</span>
+                        </div>
+                        <div style={{ color: T.txt, fontSize: 12 }}>{log.details}</div>
+                        <div style={{ color: T.muted, fontSize: 11, marginTop: 4 }}>by {log.user}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
           )}
         </div>
       </div>
