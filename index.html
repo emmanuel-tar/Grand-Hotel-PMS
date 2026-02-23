@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grand Imperial Hotel Management System</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #06080c; font-family: 'Georgia', serif; color: #d8cdb8; }
+    @keyframes toastIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes pulse{0%,100%{opacity:.9}50%{opacity:1;text-shadow:0 0 80px #D4AF3770}}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:#06080c}
+    ::-webkit-scrollbar-thumb{background:#1e2d3d;border-radius:3px}
+    select option{background:#131b24}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    // ═══════════════════════════════════════════════════════════
+    //  GRAND IMPERIAL — COMPLETE HOTEL MANAGEMENT SYSTEM v5.0
+    //  Login · RBAC · Rooms · Restaurant POS · Inventory · Reports
+    //  + Booking Portal · Gift Shop · Events · Shuttle · Staff Schedule
+    //  + Feedback · Loyalty · Payments · Notifications · Maintenance
+    //  + Tasks · Audit Logs · Theme Toggle
+    // ═══════════════════════════════════════════════════════════
+
+    // ─── DESIGN TOKENS (Dark Theme) ─────────────────────────────────────────
+    const T = {
+      bg:"#06080c", s1:"#0d1117", s2:"#131b24", s3:"#1a2433",
+      bdr:"#1e2d3d", bdrG:"#2a2000",
+      gold:"#D4AF37", goldL:"#f0cc5a", goldD:"#7a6420",
+      txt:"#d8cdb8", muted:"#4a5568", mutedL:"#718096",
+      green:"#22c55e", red:"#ef4444", orange:"#f59e0b",
+      blue:"#3b82f6", purple:"#8b5cf6", pink:"#ec4899",
+      teal:"#14b8a6", cyan:"#06b6d4",
+    };
+
+    // Light Theme Tokens
+    const LIGHT_T = {
+      bg:"#f5f5f5", s1:"#ffffff", s2:"#f8fafc", s3:"#e2e8f0",
+      bdr:"#cbd5e1", bdrG:"#e2e8f0",
+      gold:"#b8860b", goldL:"#d4af37", goldD:"#8b6914",
+      txt:"#1e293b", muted:"#64748b", mutedL:"#94a3b8",
+      green:"#16a34a", red:"#dc2626", orange:"#ea580c",
+      blue:"#2563eb", purple:"#7c3aed", pink:"#db2777",
+      teal:"#0d9488", cyan:"#0891b2",
+    };
+
+    // ─── ROLE DEFINITIONS ──────────────────────────────────────
+    const ROLES = {
+      admin:        { label:"Administrator",    color:T.red,    icon:"👑", level:5,
+                  pages:["dashboard","rooms","restaurant","inventory","housekeeping","bookings","guests","reports","settings","bookingsPortal","giftShop","events","shuttle","staffSchedule","feedback","loyalty","payments","notifications","maintenance","tasks","auditLogs"] },
+      manager:      { label:"Manager",          color:T.orange, icon:"⭐", level:4,
+                  pages:["dashboard","rooms","restaurant","inventory","housekeeping","bookings","guests","reports","settings","bookingsPortal","giftShop","events","shuttle","staffSchedule","feedback","loyalty","payments","notifications","maintenance","tasks","auditLogs"] },
+      frontdesk:    { label:"Front Desk",       color:T.blue,   icon:"🖥️", level:3,
+                  pages:["dashboard","rooms","bookings","guests","bookingsPortal","giftShop","shuttle","feedback","payments"] },
+      restaurant:   { label:"Restaurant Staff", color:T.green,  icon:"🍽️", level:2,
+                  pages:["restaurant","inventory","giftShop"] },
+      housekeeping: { label:"Housekeeping",     color:T.teal,   icon:"🧹", level:1,
+                  pages:["housekeeping","tasks","maintenance"] },
+    };
+
+    // ─── DEFAULT USERS ──────────────────────────────────────────
+    const SEED_USERS = [
+      { id:1, username:"admin",        password:"Admin@123",    name:"Alex Morgan",        role:"admin",        email:"admin@grandimperial.com",        phone:"",active:true, createdAt:"2024-01-01" },
+      { id:2, username:"manager",      password:"Mgr@123",      name:"Maria Santos",       role:"manager",      email:"manager@grandimperial.com",      phone:"",active:true, createdAt:"2024-01-01" },
+      { id:3, username:"frontdesk",    password:"Desk@123",     name:"James Okonkwo",      role:"frontdesk",    email:"frontdesk@grandimperial.com",    phone:"",active:true, createdAt:"2024-01-01" },
+      { id:4, username:"restaurant",   password:"Food@123",     name:"Chef Adaeze Nwosu",  role:"restaurant",   email:"restaurant@grandimperial.com",   phone:"",active:true, createdAt:"2024-01-01" },
+      { id:5, username:"housekeeping", password:"House@123",    name:"Fatima Al-Hassan",   role:"housekeeping", email:"housekeeping@grandimperial.com", phone:"",active:true, createdAt:"2024-01-01" },
+    ];
+
+    // ─── HOTEL SETTINGS ─────────────────────────────────────────
+    const SEED_SETTINGS = {
+      hotelName:"Grand Imperial Hotel", tagline:"Where Excellence Meets Comfort",
+      address:"12 Victoria Island Boulevard", city:"Lagos", country:"Nigeria",
+      phone:"+234 801 234 5678", email:"info@grandimperial.com",
+      website:"www.grandimperial.com", stars:5,
+      checkInTime:"14:00", checkOutTime:"11:00",
+      taxRate:7.5, serviceCharge:10, currency:"$", currencyCode:"USD",
+      totalRooms:50, logo:"⬥",
+      wifi:"Grand_Imperial_5G", wifiPass:"GrandGuest2025",
+      emergencyContact:"+234 801 999 0000",
+      breakfastPrice:18, lateCheckoutFee:50, earlyCheckinFee:30,
+    };
+
+    // ─── ROOM TYPES ─────────────────────────────────────────────
+    const ROOM_TYPES = {
+      standard:  { label:"Standard",   price:75,  color:T.blue,   beds:"1 Queen Bed",   maxGuests:2, sqft:280, amenities:["WiFi","TV","AC","Safe"] },
+      deluxe:    { label:"Deluxe",     price:120, color:T.purple, beds:"1 King Bed",    maxGuests:2, sqft:380, amenities:["WiFi","TV","AC","Safe","Minibar","Bathtub"] },
+      suite:     { label:"Suite",      price:200, color:T.gold,   beds:"King + Living", maxGuests:4, sqft:600, amenities:["WiFi","TV","AC","Safe","Minibar","Jacuzzi","Lounge"] },
+      executive: { label:"Executive",  price:160, color:T.green,  beds:"1 King Bed",    maxGuests:2, sqft:450, amenities:["WiFi","TV","AC","Safe","Minibar","Work Desk","City View"] },
+    };
+
+    const ROOM_STATUS = {
+      available:   { label:"Available",    color:T.green,     bg:"#052010" },
+      occupied:    { label:"Occupied",     color:T.red,       bg:"#200505" },
+      reserved:    { label:"Reserved",     color:T.orange,    bg:"#201005" },
+      maintenance: { label:"Maintenance",  color:"#6b7280",   bg:"#111111" },
+      checkout:    { label:"Checkout",     color:"#f97316",   bg:"#201508" },
+    };
+
+    // ─── EVENT VENUES ───────────────────────────────────────────
+    const EVENT_VENUES = [
+      { id: 1, name: "Grand Ballroom", capacity: 300, type: "ballroom", price: 5000, amenities: ["WiFi", "Projector", "Sound System", "Stage", "Catering"], image: "🎰" },
+      { id: 2, name: "Executive Boardroom", capacity: 20, type: "meeting", price: 800, amenities: ["WiFi", "TV Screen", "Video Conference", "Coffee"], image: "🏢" },
+      { id: 3, name: "Garden Pavilion", capacity: 150, type: "outdoor", price: 2500, amenities: ["WiFi", "Sound System", "Tent", "Barbecue"], image: "🌳" },
+      { id: 4, name: "Conference Hall A", capacity: 80, type: "conference", price: 1500, amenities: ["WiFi", "Projector", "Whiteboard", "Microphone"], image: "🎤" },
+      { id: 5, name: "Conference Hall B", capacity: 50, type: "conference", price: 1000, amenities: ["WiFi", "TV Screen", "Whiteboard"], image: "📋" },
+      { id: 6, name: "Terrace Lounge", capacity: 40, type: "outdoor", price: 1200, amenities: ["WiFi", "Bar", "City View"], image: "🌆" },
+    ];
+
+    const EVENT_TYPES = {
+      wedding: { label: "Wedding", icon: "💒", color: "#ec4899" },
+      conference: { label: "Conference", icon: "🎤", color: "#3b82f6" },
+      meeting: { label: "Business Meeting", icon: "🏢", color: "#8b5cf6" },
+      party: { label: "Party/Social", icon: "🎉", color: "#f59e0b" },
+      seminar: { label: "Seminar/Workshop", icon: "📚", color: "#14b8a6" },
+      banquet: { label: "Banquet", icon: "🍽️", color: "#22c55e" },
+    };
+
+    // ─── SHUTTLE VEHICLES ────────────────────────────────────────
+    const SHUTTLE_VEHICLES = [
+      { id: 1, name: "Toyota Hiace (14 Seater)", plate: "LAG 001", capacity: 14, type: "van", status: "available", price: 150 },
+      { id: 2, name: "Mercedes Sprinter (18 Seater)", plate: "LAG 002", capacity: 18, type: "bus", status: "available", price: 250 },
+      { id: 3, name: "Lexus SUV (5 Seater)", plate: "LAG 003", capacity: 5, type: "car", status: "available", price: 120 },
+      { id: 4, name: "Honda City (4 Seater)", plate: "LAG 004", capacity: 4, type: "car", status: "maintenance", price: 80 },
+    ];
+
+    const SHUTTLE_LOCATIONS = [
+      { id: 1, name: "Murtala Muhammed International Airport", distance: 25, time: 35 },
+      { id: 2, name: "Lagos Port", distance: 15, time: 25 },
+      { id: 3, name: "National Stadium", distance: 10, time: 20 },
+      { id: 4, name: "Lagos Island Business District", distance: 8, time: 15 },
+      { id: 5, name: "Victoria Island", distance: 5, time: 10 },
+    ];
+
+    // ─── GIFT SHOP ITEMS ────────────────────────────────────────
+    const GIFT_SHOP_CATS = {
+      souvenirs: { label: "Souvenirs", icon: "🎁", color: "#8b5cf6" },
+      clothing: { label: "Apparel", icon: "👕", color: "#3b82f6" },
+      accessories: { label: "Accessories", icon: "💎", color: "#ec4899" },
+      toiletries: { label: "Toiletries", icon: "🧴", color: "#14b8a6" },
+      snacks: { label: "Snacks & Drinks", icon: "🍫", color: "#f59e0b" },
+      electronics: { label: "Electronics", icon: "🎧", color: "#06b6d4" },
+    };
+
+    const GIFT_SHOP_ITEMS = [
+      { id: 1, name: "Grand Imperial T-Shirt", cat: "clothing", price: 35, stock: 50, sku: "GI-TS-001" },
+      { id: 2, name: "Hotel Logo Cap", cat: "clothing", price: 20, stock: 40, sku: "GI-CAP-001" },
+      { id: 3, name: "Designer Scarf", cat: "accessories", price: 45, stock: 25, sku: "GI-SCF-001" },
+      { id: 4, name: "Leather Keychain", cat: "accessories", price: 15, stock: 80, sku: "GI-KEY-001" },
+      { id: 5, name: "Hotel Mug", cat: "souvenirs", price: 18, stock: 60, sku: "GI-MUG-001" },
+      { id: 6, name: "Framed Hotel Photo", cat: "souvenirs", price: 55, stock: 15, sku: "GI-FRM-001" },
+      { id: 7, name: "Premium Shampoo", cat: "toiletries", price: 12, stock: 100, sku: "GI-SHP-001" },
+      { id: 8, name: "Body Lotion Set", cat: "toiletries", price: 28, stock: 45, sku: "GI-LOT-001" },
+      { id: 9, name: "Assorted Chocolates", cat: "snacks", price: 22, stock: 70, sku: "GI-CHOC" },
+      { id: 10, name: "Premium Wine (750ml)", cat: "snacks", price: 65, stock: 30, sku: "GI-WINE" },
+      { id: 11, name: "Wireless Earbuds", cat: "electronics", price: 85, stock: 20, sku: "GI-EARB" },
+      { id: 12, name: "Phone Charger", cat: "electronics", price: 25, stock: 55, sku: "GI-CHRG" },
+    ];
+
+    // ─── STAFF SCHEDULE ──────────────────────────────────────────
+    const SHIFT_TYPES = {
+      morning: { label: "Morning (6AM-2PM)", icon: "🌅", color: "#f59e0b" },
+      afternoon: { label: "Afternoon (2PM-10PM)", icon: "☀️", color: "#3b82f6" },
+      night: { label: "Night (10PM-6AM)", icon: "🌙", color: "#8b5cf6" },
+    };
+
+    const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    // ─── FEEDBACK CATEGORIES ─────────────────────────────────────
+    const FEEDBACK_CATS = {
+      room: { label: "Room", icon: "🛏️", color: "#3b82f6" },
+      restaurant: { label: "Restaurant", icon: "🍽️", color: "#f59e0b" },
+      service: { label: "Customer Service", icon: "👤", color: "#22c55e" },
+      cleanliness: { label: "Cleanliness", icon: "🧹", color: "#14b8a6" },
+      facilities: { label: "Facilities", icon: "🏋️", color: "#8b5cf6" },
+      overall: { label: "Overall Experience", icon: "⭐", color: "#ec4899" },
+    };
+
+    // ─── LOYALTY TIERS ──────────────────────────────────────────
+    const LOYALTY_TIERS = {
+      bronze: { label: "Bronze", points: 0, discount: 5, color: "#cd7f32", icon: "🥉" },
+      silver: { label: "Silver", points: 5000, discount: 10, color: "#c0c0c0", icon: "🥈" },
+      gold: { label: "Gold", points: 15000, discount: 15, color: "#ffd700", icon: "🥇" },
+      platinum: { label: "Platinum", points: 30000, discount: 20, color: "#e5e4e2", icon: "💎" },
+    };
+
+    // ─── MAINTENANCE CATEGORIES ─────────────────────────────────
+    const MAINTENANCE_CATS = {
+      plumbing: { label: "Plumbing", icon: "🔧", color: "#3b82f6", priority: "high" },
+      electrical: { label: "Electrical", icon: "⚡", color: "#f59e0b", priority: "high" },
+      hvac: { label: "HVAC/AC", icon: "❄️", color: "#06b6d4", priority: "high" },
+      furniture: { label: "Furniture", icon: "🪑", color: "#8b5cf6", priority: "medium" },
+      appliances: { label: "Appliances", icon: "🔌", color: "#22c55e", priority: "medium" },
+      general: { label: "General", icon: "🔨", color: "#64748b", priority: "low" },
+    };
+
+    const MAINTENANCE_STATUS = {
+      pending: { label: "Pending", color: "#f59e0b" },
+      in_progress: { label: "In Progress", color: "#3b82f6" },
+      completed: { label: "Completed", color: "#22c55e" },
+      cancelled: { label: "Cancelled", color: "#ef4444" },
+    };
+
+    // ─── NOTIFICATION TEMPLATES ─────────────────────────────────
+    const NOTIF_TEMPLATES = {
+      booking_confirm: { label: "Booking Confirmation", type: "email", subject: "Your Reservation at Grand Imperial" },
+      booking_reminder: { label: "Check-in Reminder", type: "sms", subject: "Reminder: Check-in Tomorrow" },
+      checkout_reminder: { label: "Checkout Reminder", type: "sms", subject: "Checkout Reminder" },
+      payment_receipt: { label: "Payment Receipt", type: "email", subject: "Payment Received - Invoice" },
+      feedback_request: { label: "Feedback Request", type: "email", subject: "We'd love your feedback!" },
+      loyalty_welcome: { label: "Welcome to Loyalty", type: "email", subject: "Welcome to Grand Imperial Rewards" },
+      special_offer: { label: "Special Offer", type: "email", subject: "Exclusive Offer for You!" },
+    };
+
+    // ─── HELPERS ────────────────────────────────────────────────
+    const ls = {
+      get:(k,d)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch{ return d; } },
+      set:(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} },
+    };
+
+    const today = () => new Date().toISOString().split("T")[0];
+    const nowStr = () => new Date().toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+    const nights = (a,b) => Math.max(1, Math.ceil((new Date(b)-new Date(a))/86400000));
+    const fmtDate = () => new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+
+    const GUEST_NAMES = ["James Wilson","Sarah Johnson","Michael Brown","Emily Davis","Robert Miller",
+      "Jennifer Garcia","William Martinez","Amanda Anderson","David Taylor","Jessica Thomas",
+      "Chidi Okafor","Ngozi Adeyemi","Kwame Mensah","Amara Diallo","Priya Patel","Carlos Rivera"];
+
+    function randGuest(){ return GUEST_NAMES[Math.floor(Math.random()*GUEST_NAMES.length)]; }
+    function randPast(d=4){ const x=new Date(); x.setDate(x.getDate()-Math.floor(Math.random()*d)-1); return x.toISOString().split("T")[0]; }
+    function randFuture(d=7){ const x=new Date(); x.setDate(x.getDate()+Math.floor(Math.random()*d)+1); return x.toISOString().split("T")[0]; }
+
+    function buildRooms(){
+      const types=["standard","standard","standard","standard","deluxe","deluxe","suite","executive"];
+      const sts=["available","available","available","occupied","occupied","reserved","available","available","maintenance"];
+      return Array.from({length:50},(_,i)=>{
+        const id=i+1, floor=Math.ceil(id/10);
+        const num=`${floor}${String(id%10===0?10:id%10).padStart(2,"0")}`;
+        const type=types[Math.floor(Math.random()*types.length)];
+        const status=sts[Math.floor(Math.random()*sts.length)];
+        const guest=(status==="occupied"||status==="checkout")?randGuest():null;
+        return {
+          id, number:num, floor, type, status, guest,
+          checkIn:guest?randPast(4):null, checkOut:guest?randFuture(6):null,
+          phone:guest?`+234 80${Math.floor(10000000+Math.random()*89999999)}`:null,
+          adults:guest?Math.ceil(Math.random()*3):1,
+          notes:"", charges:[], hk:[], dnd:false, wakeUp:"",
+        };
+      });
+    }
+
+    // ─── UI PRIMITIVES ──────────────────────────────────────────
+    function Btn({children,color=T.gold,onClick,full,sm,ghost,style={},disabled=false}){
+      const [hov,setHov]=useState(false);
+      return (
+        <button onClick={disabled?undefined:onClick}
+          onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+          disabled={disabled}
+          style={{background:ghost?"transparent":hov?color+"30":color+"18",border:`1px solid ${color}${hov?"88":"44"}`,
+            color:disabled?"#333":color,padding:sm?"5px 11px":"10px 18px",borderRadius:7,cursor:disabled?"not-allowed":"pointer",
+            fontSize:sm?11:13,fontWeight:"bold",transition:"all .15s",width:full?"100%":undefined,opacity:disabled?.5:1,...style}}>
+          {children}
+        </button>
+      );
+    }
+
+    function Badge({children,color=T.gold}){
+      return <span style={{background:color+"22",border:`1px solid ${color}44`,color,padding:"2px 10px",borderRadius:12,fontSize:11,fontWeight:"bold",display:"inline-block"}}>{children}</span>;
+    }
+
+    function Card({children,style={}}){
+      return <div style={{background:T.s1,border:`1px solid ${T.bdr}`,borderRadius:10,...style}}>{children}</div>;
+    }
+
+    function Modal({onClose,children,width=520}){
+      useEffect(()=>{ const h=e=>e.key==="Escape"&&onClose(); window.addEventListener("keydown",h); return()=>window.removeEventListener("keydown",h); },[onClose]);
+      return (
+        <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,backdropFilter:"blur(4px)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.s1,border:`1px solid ${T.gold}30`,borderRadius:12,width:"100%",maxWidth:width,maxHeight:"92vh",overflow:"auto",boxShadow:`0 32px 100px rgba(0,0,0,.9),0 0 0 1px ${T.gold}10`}}>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function ModalHeader({title,onClose}){
+      return (
+        <div style={{padding:"18px 24px",borderBottom:`1px solid ${T.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:`linear-gradient(135deg,${T.s2},${T.s1})`}}>
+          <div style={{color:T.gold,fontSize:15,letterSpacing:1,fontWeight:"normal"}}>{title}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:22,lineHeight:1,padding:"0 4px"}} onMouseEnter={e=>e.target.style.color=T.txt} onMouseLeave={e=>e.target.style.color=T.muted}>×</button>
+        </div>
+      );
+    }
+
+    function Inp({label,value,onChange,placeholder,type="text",options,disabled=false,style={}}){
+      const base={background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:7,color:T.txt,padding:"10px 14px",fontSize:13,width:"100%",outline:"none",transition:"border .15s",...style};
+      return (
+        <div style={style}>
+          {label&&<div style={{color:T.muted,fontSize:10,letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
+          {options ? (
+            <select value={value} onChange={e=>onChange(e.target.value)} disabled={disabled} style={{...base,opacity:disabled?.6:1}}>
+              {options.map(o=><option key={o.value??o} value={o.value??o}>{o.label??o}</option>)}
+            </select>
+          ) : (
+            <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+              style={{...base,opacity:disabled?.6:1}}
+              onFocus={e=>e.target.style.borderColor=T.gold+"66"}
+              onBlur={e=>e.target.style.borderColor=T.bdr}/>
+          )}
+        </div>
+      );
+    }
+
+    function SectionHead({children,style={}}){
+      return <h2 style={{color:T.gold,fontSize:19,fontWeight:"normal",letterSpacing:2,marginBottom:20,...style}}>{children}</h2>;
+    }
+
+    function Toast({msg,type="success"}){
+      const col=type==="error"?T.red:type==="warn"?T.orange:T.green;
+      return (
+        <div style={{position:"fixed",bottom:20,right:20,background:T.s2,border:`1px solid ${col}66`,color:T.txt,padding:"13px 18px",borderRadius:9,boxShadow:`0 8px 32px rgba(0,0,0,.7),0 0 0 1px ${col}22`,fontSize:13,zIndex:3000,animation:"toastIn .3s ease",maxWidth:380,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:col,fontSize:16}}>{type==="error"?"✕":type==="warn"?"⚠":"✓"}</span>
+          {msg}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  LOGIN PAGE
+    // ═══════════════════════════════════════════════════════════
+    function LoginPage({onLogin, settings, theme}){
+      const [username,setUsername]=useState("");
+      const [password,setPassword]=useState("");
+      const [showPw,setShowPw]=useState(false);
+      const [err,setErr]=useState("");
+      const [loading,setLoading]=useState(false);
+      const users = ls.get("hotel_users", SEED_USERS);
+
+      const attempt = () => {
+        if(!username||!password){ setErr("Please enter username and password"); return; }
+        setLoading(true);
+        setTimeout(()=>{
+          const u=users.find(u=>u.username===username.trim()&&u.password===password&&u.active);
+          if(!u){ setErr("Invalid credentials or account is disabled"); setLoading(false); return; }
+          onLogin({...u,loginAt:nowStr()});
+        },600);
+      };
+
+      const demos=[
+        {role:"admin",u:"admin",p:"Admin@123"},
+        {role:"manager",u:"manager",p:"Mgr@123"},
+        {role:"frontdesk",u:"frontdesk",p:"Desk@123"},
+        {role:"restaurant",u:"restaurant",p:"Food@123"},
+        {role:"housekeeping",u:"housekeeping",p:"House@123"},
+      ];
+
+      return (
+        <div style={{minHeight:"100vh",background:theme.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Georgia','Times New Roman',serif",padding:16,position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(ellipse at 20% 40%,${T.gold}07 0%,transparent 55%),radial-gradient(ellipse at 80% 70%,${T.blue}05 0%,transparent 50%)`,pointerEvents:"none"}}/>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent 0%,${T.gold}60 50%,transparent 100%)`}}/>
+
+          <div style={{width:"100%",maxWidth:460,position:"relative"}}>
+            <div style={{textAlign:"center",marginBottom:32}}>
+              <div style={{fontSize:52,color:T.gold,textShadow:`0 0 60px ${T.gold}50`,marginBottom:14,animation:"pulse 3s ease-in-out infinite"}}>{settings.logo}</div>
+              <div style={{fontSize:24,fontWeight:"bold",color:T.gold,letterSpacing:4,marginBottom:4}}>{settings.hotelName.toUpperCase()}</div>
+              <div style={{color:T.muted,fontSize:11,letterSpacing:3}}>{settings.tagline||"MANAGEMENT SYSTEM"}</div>
+              <div style={{width:80,height:1,background:`linear-gradient(90deg,transparent,${T.gold},transparent)`,margin:"18px auto 0"}}/>
+            </div>
+
+            <Card style={{padding:32,boxShadow:`0 24px 80px rgba(0,0,0,.6),0 0 0 1px ${T.gold}10`}}>
+              <div style={{color:T.muted,fontSize:12,letterSpacing:2,textAlign:"center",marginBottom:24}}>STAFF SIGN IN</div>
+              {err&&(
+                <div style={{background:"#200505",border:`1px solid ${T.red}44`,color:T.red,padding:"11px 14px",borderRadius:7,marginBottom:16,fontSize:13,display:"flex",alignItems:"center",gap:8}}>
+                  <span>⚠</span>{err}
+                </div>
+              )}
+              <div style={{display:"flex",flexDirection:"column",gap:15}}>
+                <Inp label="Username" value={username} onChange={v=>{setUsername(v);setErr("");}} placeholder="Enter your username"/>
+                <div>
+                  <div style={{color:T.muted,fontSize:10,letterSpacing:1.5,marginBottom:5,textTransform:"uppercase"}}>Password</div>
+                  <div style={{position:"relative"}}>
+                    <input type={showPw?"text":"password"} value={password} onChange={e=>{setPassword(e.target.value);setErr("");}}
+                      onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="Enter your password"
+                      style={{background:T.s2,border:`1px solid ${T.bdr}`,borderRadius:7,color:T.txt,padding:"10px 44px 10px 14px",fontSize:13,width:"100%",outline:"none"}}
+                      onFocus={e=>e.target.style.borderColor=T.gold+"66"} onBlur={e=>e.target.style.borderColor=T.bdr}/>
+                    <button onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:15}}>{showPw?"🙈":"👁"}</button>
+                  </div>
+                </div>
+                <button onClick={attempt} disabled={loading}
+                  style={{background:`linear-gradient(135deg,${T.gold}dd,${T.goldD}dd)`,border:"none",color:"#0a0800",padding:"13px",borderRadius:8,cursor:loading?"wait":"pointer",fontSize:14,fontWeight:"bold",letterSpacing:1,marginTop:6,transition:"all .2s",opacity:loading?.7:1}}>
+                  {loading?"Authenticating…":"🔐  SIGN IN"}
+                </button>
+              </div>
+            </Card>
+
+            <Card style={{padding:20,marginTop:16}}>
+              <div style={{color:T.muted,fontSize:10,letterSpacing:2,marginBottom:14,textAlign:"center"}}>DEMO CREDENTIALS — CLICK TO AUTOFILL</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {demos.map(d=>{
+                  const r=ROLES[d.role];
+                  return (
+                    <button key={d.role} onClick={()=>{setUsername(d.u);setPassword(d.p);setErr("");}}
+                      style={{background:T.s2,border:`1px solid ${r.color}25`,borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",transition:"all .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=r.color+"66";e.currentTarget.style.background=r.color+"10";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=r.color+"25";e.currentTarget.style.background=T.s2;}}>
+                      <div style={{fontSize:12,color:r.color,fontWeight:"bold",marginBottom:2}}>{r.icon} {r.label}</div>
+                      <div style={{fontSize:10,color:T.muted}}>{d.u} / {d.p}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ONLINE BOOKING PORTAL
+    // ═══════════════════════════════════════════════════════════
+    function OnlineBookingPortal({settings, rooms, bookings, setBookings, addToast}) {
+      const [checkIn, setCheckIn] = useState("");
+      const [checkOut, setCheckOut] = useState("");
+      const [guests, setGuests] = useState(1);
+      const [roomType, setRoomType] = useState("all");
+      const [selectedRoom, setSelectedRoom] = useState(null);
+      const [bookingForm, setBookingForm] = useState({ name: "", email: "", phone: "", special: "" });
+      const [step, setStep] = useState(1);
+
+      const availableRooms = rooms.filter(r => r.status === "available" && (roomType === "all" || r.type === roomType));
+      
+      const getNights = () => {
+        if (!checkIn || !checkOut) return 0;
+        return Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000);
+      };
+
+      const handleBook = () => {
+        if (!selectedRoom) return;
+        if (!bookingForm.name || !bookingForm.email) {
+          addToast("Please fill required fields", "error");
+          return;
+        }
+        
+        const booking = {
+          id: Date.now(),
+          roomId: selectedRoom.id,
+          room: selectedRoom.number,
+          guest: bookingForm.name,
+          email: bookingForm.email,
+          phone: bookingForm.phone,
+          checkIn,
+          checkOut,
+          type: selectedRoom.type,
+          rate: ROOM_TYPES[selectedRoom.type].price,
+          guests,
+          special: bookingForm.special,
+          status: "pending",
+          source: "online",
+          createdAt: nowStr()
+        };
+        
+        setBookings([...bookings, booking]);
+        addToast("Booking submitted! We will confirm shortly.");
+        setStep(3);
+      };
+
+      return (
+        <div>
+          <SectionHead>Online Booking Portal</SectionHead>
+          
+          {step === 1 && (
+            <div style={{ maxWidth: 800, margin: "0 auto" }}>
+              <Card style={{ padding: 30 }}>
+                <div style={{ textAlign: "center", marginBottom: 30 }}>
+                  <div style={{ fontSize: 48, marginBottom: 10 }}>{settings.logo}</div>
+                  <div style={{ color: T.gold, fontSize: 24, fontWeight: "bold" }}>{settings.hotelName}</div>
+                  <div style={{ color: T.muted }}>{settings.tagline}</div>
+                </div>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 25 }}>
+                  <Inp label="Check-In Date" type="date" value={checkIn} onChange={setCheckIn} />
+                  <Inp label="Check-Out Date" type="date" value={checkOut} onChange={setCheckOut} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 25 }}>
+                  <Inp label="Number of Guests" value={guests} onChange={v => setGuests(+v)} options={[1,2,3,4].map(n => ({ value: n, label: `${n} Guest${n > 1 ? "s" : ""}` }))} />
+                  <Inp label="Room Type" value={roomType} onChange={setRoomType} options={[{ value: "all", label: "All Types" }, ...Object.entries(ROOM_TYPES).map(([k, v]) => ({ value: k, label: `${v.label} - $${v.price}/night` }))]} />
+                </div>
+                
+                {getNights() > 0 && (
+                  <div style={{ background: T.s2, borderRadius: 8, padding: 15, marginBottom: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ color: T.muted }}>{getNights()} night{getNights() > 1 ? "s" : ""}</span>
+                      <span style={{ color: T.gold, fontWeight: "bold" }}>{settings.currency}{getNights() * (ROOM_TYPES[roomType]?.price || 100)}</span>
+                    </div>
+                  </div>
+                )}
+                
+                <Btn color={T.green} onClick={() => setStep(2)} full disabled={!checkIn || !checkOut}>Search Available Rooms</Btn>
+              </Card>
+            </div>
+          )}
+          
+          {step === 2 && (
+            <div>
+              <Btn sm color={T.muted} onClick={() => setStep(1)} style={{ marginBottom: 20 }}>← Back</Btn>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 15 }}>
+                {availableRooms.map(room => {
+                  const rt = ROOM_TYPES[room.type];
+                  return (
+                    <Card key={room.id} style={{ padding: 20 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                        <span style={{ fontSize: 20, fontWeight: "bold", color: T.gold }}>Room {room.number}</span>
+                        <Badge color={rt.color}>{rt.label}</Badge>
+                      </div>
+                      <div style={{ color: T.muted, fontSize: 12, marginBottom: 10 }}>{rt.beds} · Max {rt.maxGuests} guests</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 15 }}>
+                        <span style={{ color: T.gold, fontSize: 22, fontWeight: "bold" }}>{settings.currency}{rt.price}<span style={{ fontSize: 12, color: T.muted }}>/night</span></span>
+                      </div>
+                      <Btn color={T.green} onClick={() => { setSelectedRoom(room); setStep(3); }} full>Select Room</Btn>
+                    </Card>
+                  );
+                })}
+              </div>
+              {availableRooms.length === 0 && (
+                <div style={{ textAlign: "center", padding: 60, color: T.muted }}>
+                  No rooms available for selected criteria
+                </div>
+              )}
+            </div>
+          )}
+          
+          {step === 3 && selectedRoom && (
+            <div style={{ maxWidth: 600, margin: "0 auto" }}>
+              <Btn sm color={T.muted} onClick={() => setStep(2)} style={{ marginBottom: 20 }}>← Back</Btn>
+              <Card style={{ padding: 30 }}>
+                <div style={{ textAlign: "center", marginBottom: 25 }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>✓</div>
+                  <div style={{ color: T.gold, fontSize: 18, fontWeight: "bold" }}>Complete Your Booking</div>
+                  <div style={{ color: T.muted }}>Room {selectedRoom.number} · {ROOM_TYPES[selectedRoom.type].label}</div>
+                </div>
+                
+                <div style={{ background: T.s2, borderRadius: 8, padding: 15, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ color: T.muted }}>Check-In</span>
+                    <span style={{ color: T.txt }}>{checkIn}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ color: T.muted }}>Check-Out</span>
+                    <span style={{ color: T.txt }}>{checkOut}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${T.bdr}`, paddingTop: 8, marginTop: 8 }}>
+                    <span style={{ color: T.gold, fontWeight: "bold" }}>Total</span>
+                    <span style={{ color: T.gold, fontWeight: "bold", fontSize: 20 }}>{settings.currency}{getNights() * ROOM_TYPES[selectedRoom.type].price}</span>
+                  </div>
+                </div>
+                
+                <Inp label="Full Name *" value={bookingForm.name} onChange={v => setBookingForm(f => ({ ...f, name: v }))} placeholder="As on ID" />
+                <div style={{ marginTop: 15 }}><Inp label="Email *" type="email" value={bookingForm.email} onChange={v => setBookingForm(f => ({ ...f, email: v }))} placeholder="your@email.com" /></div>
+                <div style={{ marginTop: 15 }}><Inp label="Phone" value={bookingForm.phone} onChange={v => setBookingForm(f => ({ ...f, phone: v }))} placeholder="+234..." /></div>
+                <div style={{ marginTop: 15 }}><Inp label="Special Requests" value={bookingForm.special} onChange={v => setBookingForm(f => ({ ...f, special: v }))} placeholder="Any special requirements..." /></div>
+                
+                <div style={{ marginTop: 25 }}>
+                  <Btn color={T.green} onClick={handleBook} full>Confirm Booking</Btn>
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  GIFT SHOP PAGE
+    // ═══════════════════════════════════════════════════════════
+    function GiftShopPage({items, categories, orders, setOrders, addToast, currentUser}) {
+      const [cat, setCat] = useState("all");
+      const [cart, setCart] = useState([]);
+      const [checkoutMode, setCheckoutMode] = useState(false);
+      const [form, setForm] = useState({ name: "", phone: "", roomNum: "" });
+      
+      const filtered = cat === "all" ? items : items.filter(i => i.cat === cat);
+      const cartTotal = cart.reduce((s, c) => s + c.item.price * c.qty, 0);
+      
+      const addToCart = item => setCart(p => {
+        const existing = p.find(c => c.item.id === item.id);
+        return existing ? p.map(c => c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c) : [...p, { item, qty: 1 }];
+      });
+      
+      const removeFromCart = id => setCart(p => p.filter(c => c.item.id !== id));
+      
+      const placeOrder = () => {
+        if (!form.name) { addToast("Enter customer name", "error"); return; }
+        const order = {
+          id: `GIF-${Date.now().toString().slice(-6)}`,
+          items: cart,
+          total: cartTotal,
+          customer: form.name,
+          phone: form.phone,
+          room: form.roomNum,
+          status: "pending",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setOrders([order, ...orders]);
+        setCart([]);
+        setCheckoutMode(false);
+        setForm({ name: "", phone: "", roomNum: "" });
+        addToast(`Order ${order.id} placed!`);
+      };
+      
+      return (
+        <div>
+          <SectionHead>Gift Shop</SectionHead>
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <button onClick={() => setCat("all")} style={{ background: cat === "all" ? `${T.gold}22` : T.s2, border: `1px solid ${cat === "all" ? T.gold : T.bdr}`, color: cat === "all" ? T.gold : T.muted, padding: "8px 16px", borderRadius: 20, cursor: "pointer" }}>All ({items.length})</button>
+            {Object.entries(categories).map(([k, v]) => (
+              <button key={k} onClick={() => setCat(k)} style={{ background: cat === k ? `${v.color}22` : T.s2, border: `1px solid ${cat === k ? v.color : T.bdr}`, color: cat === k ? v.color : T.muted, padding: "8px 16px", borderRadius: 20, cursor: "pointer" }}>{v.icon} {v.label}</button>
+            ))}
+            <div style={{ flex: 1 }} />
+            <Btn sm color={T.blue} onClick={() => setCheckoutMode(true)}>🛒 Cart ({cart.length})</Btn>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 15 }}>
+            {filtered.map(item => {
+              const ct = categories[item.cat];
+              return (
+                <Card key={item.id} style={{ padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ color: ct.color, fontSize: 24 }}>{ct.icon}</span>
+                    <Badge color={item.stock > 10 ? T.green : T.orange}>{item.stock} in stock</Badge>
+                  </div>
+                  <div style={{ color: T.txt, fontWeight: "bold", marginBottom: 5 }}>{item.name}</div>
+                  <div style={{ color: T.muted, fontSize: 11, marginBottom: 10 }}>SKU: {item.sku}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: T.gold, fontSize: 20, fontWeight: "bold" }}>${item.price}</span>
+                    <Btn sm color={T.green} onClick={() => addToCart(item)}>Add</Btn>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+          
+          {checkoutMode && (
+            <Modal onClose={() => setCheckoutMode(false)} width={500}>
+              <ModalHeader title="Shopping Cart" onClose={() => setCheckoutMode(false)} />
+              <div style={{ padding: 20 }}>
+                {cart.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 40, color: T.muted }}>Cart is empty</div>
+                ) : (
+                  <>
+                    {cart.map(c => (
+                      <div key={c.item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.bdr}` }}>
+                        <div>
+                          <div style={{ color: T.txt }}>{c.item.name}</div>
+                          <div style={{ color: T.muted, fontSize: 12 }}>${c.item.price} × {c.qty}</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ color: T.gold, fontWeight: "bold" }}>${c.item.price * c.qty}</span>
+                          <button onClick={() => removeFromCart(c.item.id)} style={{ background: "none", border: "none", color: T.red, cursor: "pointer", fontSize: 18 }}>×</button>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20, paddingTop: 15, borderTop: `2px solid ${T.gold}` }}>
+                      <span style={{ color: T.gold, fontWeight: "bold", fontSize: 18 }}>Total</span>
+                      <span style={{ color: T.gold, fontWeight: "bold", fontSize: 22 }}>${cartTotal}</span>
+                    </div>
+                    <Inp label="Customer Name *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} style={{ marginTop: 20 }} />
+                    <Inp label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} style={{ marginTop: 15 }} />
+                    <Inp label="Room Number (if delivery)" value={form.roomNum} onChange={v => setForm(f => ({ ...f, roomNum: v }))} style={{ marginTop: 15 }} />
+                    <Btn color={T.green} onClick={placeOrder} full style={{ marginTop: 20 }}>Complete Sale</Btn>
+                  </>
+                )}
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  EVENTS PAGE
+    // ═══════════════════════════════════════════════════════════
+    function EventsPage({venues, eventTypes, events, setEvents, addToast, currentUser}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ venueId: "", type: "", date: "", time: "", guests: 50, name: "", email: "", phone: "", notes: "" });
+      
+      const handleSubmit = () => {
+        if (!form.venueId || !form.date || !form.name) { addToast("Fill required fields", "error"); return; }
+        const venue = venues.find(v => v.id === +form.venueId);
+        const eventType = eventTypes[form.type];
+        const newEvent = {
+          id: Date.now(),
+          ...form,
+          venue: venue?.name,
+          venueType: venue?.type,
+          typeLabel: eventType?.label,
+          status: "pending",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setEvents([newEvent, ...events]);
+        setModal(null);
+        setForm({ venueId: "", type: "", date: "", time: "", guests: 50, name: "", email: "", phone: "", notes: "" });
+        addToast("Event booked successfully!");
+      };
+      
+      return (
+        <div>
+          <SectionHead>Events & Conferences</SectionHead>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ color: T.muted }}>{events.length} bookings</div>
+            <Btn color={T.green} onClick={() => setModal("book")}>+ Book Event</Btn>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 15, marginBottom: 30 }}>
+            {venues.map(venue => {
+              const typeInfo = EVENT_TYPES[venue.type] || {};
+              return (
+                <Card key={venue.id} style={{ padding: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontSize: 32 }}>{venue.image}</span>
+                    <Badge color={typeInfo.color || T.blue}>{typeInfo.label || venue.type}</Badge>
+                  </div>
+                  <div style={{ color: T.txt, fontWeight: "bold", fontSize: 16, marginBottom: 5 }}>{venue.name}</div>
+                  <div style={{ color: T.muted, fontSize: 12, marginBottom: 10 }}>Capacity: {venue.capacity} guests</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: T.gold, fontSize: 22, fontWeight: "bold" }}>${venue.price}<span style={{ fontSize: 12, color: T.muted }}>/event</span></span>
+                    <Btn sm color={T.blue} onClick={() => { setForm(f => ({ ...f, venueId: venue.id })); setModal("book"); }}>Book</Btn>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+          
+          {events.length > 0 && (
+            <Card style={{ padding: 20 }}>
+              <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Upcoming Events</div>
+              {events.map(e => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${T.bdr}` }}>
+                  <div>
+                    <div style={{ color: T.txt }}>{e.venue} - {e.typeLabel}</div>
+                    <div style={{ color: T.muted, fontSize: 12 }}>{e.date} at {e.time} · {e.guests} guests · {e.name}</div>
+                  </div>
+                  <Badge color={e.status === "confirmed" ? T.green : T.orange}>{e.status}</Badge>
+                </div>
+              ))}
+            </Card>
+          )}
+          
+          {modal === "book" && (
+            <Modal onClose={() => setModal(null)} width={500}>
+              <ModalHeader title="Book Event Space" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Select Venue *" value={form.venueId} onChange={v => setForm(f => ({ ...f, venueId: v }))} options={[{ value: "", label: "Choose venue..." }, ...venues.map(v => ({ value: v.id, label: `${v.name} (${v.capacity} guests)` }))]} />
+                <Inp label="Event Type" value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))} options={[{ value: "", label: "Choose type..." }, ...Object.entries(eventTypes).map(([k, v]) => ({ value: k, label: `${v.icon} ${v.label}` }))]} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
+                  <Inp label="Date *" type="date" value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
+                  <Inp label="Time" type="time" value={form.time} onChange={v => setForm(f => ({ ...f, time: v }))} />
+                </div>
+                <Inp label="Number of Guests" value={form.guests} onChange={v => setForm(f => ({ ...f, guests: +v }))} />
+                <Inp label="Contact Name *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} />
+                <Inp label="Email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} />
+                <Inp label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
+                <Btn color={T.green} onClick={handleSubmit} full>Confirm Booking</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  SHUTTLE PAGE
+    // ═══════════════════════════════════════════════════════════
+    function ShuttlePage({vehicles, locations, bookings, setBookings, addToast, currentUser}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ vehicleId: "", locationId: "", date: "", time: "", guests: 1, name: "", phone: "", type: "pickup" });
+      
+      const handleBook = () => {
+        if (!form.vehicleId || !form.locationId || !form.date) { addToast("Fill required fields", "error"); return; }
+        const vehicle = vehicles.find(v => v.id === +form.vehicleId);
+        const location = locations.find(l => l.id === +form.locationId);
+        const booking = {
+          id: `SH-${Date.now().toString().slice(-6)}`,
+          ...form,
+          vehicle: vehicle?.name,
+          vehiclePlate: vehicle?.plate,
+          location: location?.name,
+          distance: location?.distance,
+          duration: location?.time,
+          price: vehicle?.price,
+          status: "confirmed",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setBookings([booking, ...bookings]);
+        setModal(null);
+        setForm({ vehicleId: "", locationId: "", date: "", time: "", guests: 1, name: "", phone: "", type: "pickup" });
+        addToast(`Shuttle booked: ${booking.id}`);
+      };
+      
+      return (
+        <div>
+          <SectionHead>Airport Shuttle</SectionHead>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ color: T.muted }}>{bookings.length} bookings</div>
+            <Btn color={T.green} onClick={() => setModal("book")}>+ Book Shuttle</Btn>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 30 }}>
+            <Card style={{ padding: 20 }}>
+              <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Available Vehicles</div>
+              {vehicles.filter(v => v.status === "available").map(v => (
+                <div key={v.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${T.bdr}` }}>
+                  <div>
+                    <div style={{ color: T.txt }}>{v.name}</div>
+                    <div style={{ color: T.muted, fontSize: 11 }}>Plate: {v.plate} · {v.capacity} seats</div>
+                  </div>
+                  <span style={{ color: T.gold, fontWeight: "bold" }}>${v.price}</span>
+                </div>
+              ))}
+            </Card>
+            <Card style={{ padding: 20 }}>
+              <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Popular Locations</div>
+              {locations.map(l => (
+                <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${T.bdr}` }}>
+                  <div>
+                    <div style={{ color: T.txt }}>{l.name}</div>
+                    <div style={{ color: T.muted, fontSize: 11 }}>~{l.time} min · {l.distance} km</div>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          </div>
+          
+          {bookings.length > 0 && (
+            <Card style={{ padding: 20 }}>
+              <div style={{ color: T.gold, fontSize: 14, marginBottom: 15 }}>Recent Bookings</div>
+              {bookings.map(b => (
+                <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${T.bdr}` }}>
+                  <div>
+                    <div style={{ color: T.txt }}>{b.type === "pickup" ? "🛬 Pickup" : "🛫 Drop-off"}: {b.location}</div>
+                    <div style={{ color: T.muted, fontSize: 12 }}>{b.date} at {b.time} · {b.vehicle} · {b.name}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ color: T.gold, fontWeight: "bold" }}>${b.price}</span>
+                    <Badge color={T.green}>Confirmed</Badge>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+          
+          {modal === "book" && (
+            <Modal onClose={() => setModal(null)} width={450}>
+              <ModalHeader title="Book Shuttle" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[{ v: "pickup", l: "🛬 Pickup" }, { v: "dropoff", l: "🛫 Drop-off" }].map(opt => (
+                    <button key={opt.v} onClick={() => setForm(f => ({ ...f, type: opt.v }))} style={{ flex: 1, background: form.type === opt.v ? `${T.blue}22` : T.s2, border: `1px solid ${form.type === opt.v ? T.blue : T.bdr}`, color: form.type === opt.v ? T.blue : T.muted, padding: "12px", borderRadius: 8, cursor: "pointer" }}>{opt.l}</button>
+                  ))}
+                </div>
+                <Inp label="Vehicle *" value={form.vehicleId} onChange={v => setForm(f => ({ ...f, vehicleId: v }))} options={[{ value: "", label: "Select vehicle..." }, ...vehicles.filter(v => v.status === "available").map(v => ({ value: v.id, label: `${v.name} (${v.capacity} seats - $${v.price})` }))]} />
+                <Inp label="Location *" value={form.locationId} onChange={v => setForm(f => ({ ...f, locationId: v }))} options={[{ value: "", label: "Select location..." }, ...locations.map(l => ({ value: l.id, label: `${l.name} (${l.distance}km - ${l.time}min)` }))]} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
+                  <Inp label="Date *" type="date" value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
+                  <Inp label="Time" type="time" value={form.time} onChange={v => setForm(f => ({ ...f, time: v }))} />
+                </div>
+                <Inp label="Passenger Name *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} />
+                <Inp label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
+                <Btn color={T.green} onClick={handleBook} full>Confirm Booking</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  STAFF SCHEDULE PAGE
+    // ═══════════════════════════════════════════════════════════
+    function StaffSchedulePage({users, shifts, days, schedule, setSchedule, addToast, currentUser}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ userId: "", day: "", shift: "" });
+      
+      const assignShift = () => {
+        if (!form.userId || !form.day || !form.shift) { addToast("Fill all fields", "error"); return; }
+        const user = users.find(u => u.id === +form.userId);
+        const shift = shifts[form.shift];
+        const entry = {
+          id: Date.now(),
+          userId: form.userId,
+          userName: user?.name,
+          day: form.day,
+          shift: form.shift,
+          shiftLabel: shift?.label,
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setSchedule([...schedule.filter(s => !(s.userId === form.userId && s.day === form.day)), entry]);
+        setModal(null);
+        setForm({ userId: "", day: "", shift: "" });
+        addToast("Shift assigned!");
+      };
+      
+      const getShiftsForDay = (day) => schedule.filter(s => s.day === day);
+      
+      return (
+        <div>
+          <SectionHead>Staff Schedule</SectionHead>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ color: T.muted }}>{schedule.length} shifts assigned</div>
+            <Btn color={T.green} onClick={() => setModal("add")}>+ Assign Shift</Btn>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 10 }}>
+            {days.map(day => (
+              <Card key={day} style={{ padding: 15, minHeight: 200 }}>
+                <div style={{ color: T.gold, fontSize: 12, fontWeight: "bold", marginBottom: 10, textAlign: "center" }}>{day.slice(0, 3)}</div>
+                {getShiftsForDay(day).map(s => (
+                  <div key={s.id} style={{ background: shifts[s.shift]?.color + "22", border: `1px solid ${shifts[s.shift]?.color}44`, borderRadius: 6, padding: 8, marginBottom: 6 }}>
+                    <div style={{ color: shifts[s.shift]?.color, fontSize: 10, fontWeight: "bold" }}>{shifts[s.shift]?.icon} {s.shiftLabel}</div>
+                    <div style={{ color: T.txt, fontSize: 11 }}>{s.userName}</div>
+                  </div>
+                ))}
+              </Card>
+            ))}
+          </div>
+          
+          {modal === "add" && (
+            <Modal onClose={() => setModal(null)} width={400}>
+              <ModalHeader title="Assign Shift" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Staff Member" value={form.userId} onChange={v => setForm(f => ({ ...f, userId: v }))} options={[{ value: "", label: "Select staff..." }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
+                <Inp label="Day" value={form.day} onChange={v => setForm(f => ({ ...f, day: v }))} options={[{ value: "", label: "Select day..." }, ...days.map(d => ({ value: d, label: d }))]} />
+                <Inp label="Shift" value={form.shift} onChange={v => setForm(f => ({ ...f, shift: v }))} options={[{ value: "", label: "Select shift..." }, ...Object.entries(shifts).map(([k, v]) => ({ value: k, label: `${v.icon} ${v.label}` }))]} />
+                <Btn color={T.green} onClick={assignShift} full>Assign</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  FEEDBACK PAGE
+    // ═══════════════════════════════════════════════════════════
+    function FeedbackPage({categories, feedback, setFeedback, addToast, currentUser}) {
+      const [filter, setFilter] = useState("all");
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ category: "", rating: 5, comment: "", guestName: "", room: "" });
+      
+      const submitFeedback = () => {
+        if (!form.category || !form.guestName) { addToast("Fill required fields", "error"); return; }
+        const cat = categories[form.category];
+        const entry = {
+          id: Date.now(),
+          ...form,
+          categoryLabel: cat?.label,
+          ratingLabel: "★".repeat(form.rating),
+          status: "new",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setFeedback([entry, ...feedback]);
+        setModal(null);
+        setForm({ category: "", rating: 5, comment: "", guestName: "", room: "" });
+        addToast("Feedback submitted!");
+      };
+      
+      const filtered = filter === "all" ? feedback : feedback.filter(f => f.category === filter);
+      const avgRating = feedback.length ? (feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1) : 0;
+      
+      return (
+        <div>
+          <SectionHead>Guest Feedback</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.gold }}>{avgRating}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Avg Rating</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.green }}>{feedback.filter(f => f.rating >= 4).length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Positive</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.orange }}>{feedback.filter(f => f.rating === 3).length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Neutral</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.red }}>{feedback.filter(f => f.rating < 3).length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Negative</div>
+            </Card>
+          </div>
+          
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <button onClick={() => setFilter("all")} style={{ background: filter === "all" ? `${T.gold}22` : T.s2, border: `1px solid ${filter === "all" ? T.gold : T.bdr}`, color: filter === "all" ? T.gold : T.muted, padding: "8px 16px", borderRadius: 20, cursor: "pointer" }}>All ({feedback.length})</button>
+            {Object.entries(categories).map(([k, v]) => (
+              <button key={k} onClick={() => setFilter(k)} style={{ background: filter === k ? `${v.color}22` : T.s2, border: `1px solid ${filter === k ? v.color : T.bdr}`, color: filter === k ? v.color : T.muted, padding: "8px 16px", borderRadius: 20, cursor: "pointer" }}>{v.icon} {v.label}</button>
+            ))}
+            <div style={{ flex: 1 }} />
+            <Btn color={T.green} onClick={() => setModal("add")}>+ Add Feedback</Btn>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {filtered.map(f => {
+              const cat = categories[f.category];
+              return (
+                <Card key={f.id} style={{ padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div>
+                      <span style={{ color: cat?.color, fontWeight: "bold" }}>{cat?.icon} {f.categoryLabel}</span>
+                      <span style={{ color: T.muted, marginLeft: 10 }}>from {f.guestName}</span>
+                    </div>
+                    <span style={{ color: f.rating >= 4 ? T.green : f.rating >= 3 ? T.orange : T.red, fontSize: 16 }}>{"★".repeat(f.rating)}</span>
+                  </div>
+                  {f.comment && <div style={{ color: T.txt, marginBottom: 10 }}>{f.comment}</div>}
+                  <div style={{ color: T.muted, fontSize: 11 }}>{f.at} · Room {f.room || "N/A"}</div>
+                </Card>
+              );
+            })}
+            {filtered.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No feedback yet</div>}
+          </div>
+          
+          {modal === "add" && (
+            <Modal onClose={() => setModal(null)} width={450}>
+              <ModalHeader title="Add Feedback" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Guest Name *" value={form.guestName} onChange={v => setForm(f => ({ ...f, guestName: v }))} />
+                <Inp label="Room Number" value={form.room} onChange={v => setForm(f => ({ ...f, room: v }))} />
+                <Inp label="Category *" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={[{ value: "", label: "Select category..." }, ...Object.entries(categories).map(([k, v]) => ({ value: k, label: `${v.icon} ${v.label}` }))]} />
+                <div>
+                  <div style={{ color: T.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 5 }}>RATING</div>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {[1, 2, 3, 4, 5].map(r => (
+                      <button key={r} onClick={() => setForm(f => ({ ...f, rating: r }))} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: r <= form.rating ? T.gold : T.muted }}>★</button>
+                    ))}
+                  </div>
+                </div>
+                <Inp label="Comments" value={form.comment} onChange={v => setForm(f => ({ ...f, comment: v }))} />
+                <Btn color={T.green} onClick={submitFeedback} full>Submit Feedback</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  LOYALTY PAGE
+    // ═══════════════════════════════════════════════════════════
+    function LoyaltyPage({tiers, members, setMembers, addToast}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ name: "", email: "", phone: "", points: 0 });
+      
+      const enrollMember = () => {
+        if (!form.name || !form.email) { addToast("Fill required fields", "error"); return; }
+        const getTier = (pts) => {
+          if (pts >= 30000) return "platinum";
+          if (pts >= 15000) return "gold";
+          if (pts >= 5000) return "silver";
+          return "bronze";
+        };
+        const member = {
+          id: Date.now(),
+          ...form,
+          tier: getTier(form.points),
+          totalPoints: form.points,
+          visits: 0,
+          status: "active",
+          enrolledAt: nowStr()
+        };
+        setMembers([member, ...members]);
+        setModal(null);
+        setForm({ name: "", email: "", phone: "", points: 0 });
+        addToast("Member enrolled!");
+      };
+      
+      const updatePoints = (id, points) => {
+        setMembers(members.map(m => m.id === id ? { ...m, points: m.points + points, totalPoints: m.totalPoints + points } : m));
+        addToast(`Points updated!`);
+      };
+      
+      return (
+        <div>
+          <SectionHead>Loyalty Program</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+            {Object.entries(tiers).map(([k, v]) => (
+              <Card key={k} style={{ padding: 15, textAlign: "center", borderTop: `3px solid ${v.color}` }}>
+                <div style={{ fontSize: 24, marginBottom: 5 }}>{v.icon}</div>
+                <div style={{ color: v.color, fontWeight: "bold" }}>{v.label}</div>
+                <div style={{ color: T.muted, fontSize: 11 }}>{v.points}+ points</div>
+                <div style={{ color: T.gold, fontSize: 12, marginTop: 5 }}>{v.discount}% discount</div>
+              </Card>
+            ))}
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ color: T.muted }}>{members.length} members</div>
+            <Btn color={T.green} onClick={() => setModal("add")}>+ Enroll Member</Btn>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 15 }}>
+            {members.map(m => {
+              const tier = tiers[m.tier] || tiers.bronze;
+              return (
+                <Card key={m.id} style={{ padding: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ color: T.txt, fontWeight: "bold" }}>{m.name}</div>
+                      <div style={{ color: T.muted, fontSize: 12 }}>{m.email}</div>
+                    </div>
+                    <Badge color={tier.color}>{tier.icon} {tier.label}</Badge>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ color: T.gold, fontSize: 24, fontWeight: "bold" }}>{m.points}</div>
+                      <div style={{ color: T.muted, fontSize: 11 }}>Points</div>
+                    </div>
+                    <div>
+                      <div style={{ color: T.txt, fontSize: 18 }}>{m.visits}</div>
+                      <div style={{ color: T.muted, fontSize: 11 }}>Visits</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    <Btn sm color={T.green} onClick={() => updatePoints(m.id, 100)} style={{ flex: 1 }}>+100</Btn>
+                    <Btn sm color={T.blue} onClick={() => updatePoints(m.id, 500)} style={{ flex: 1 }}>+500</Btn>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+          
+          {modal === "add" && (
+            <Modal onClose={() => setModal(null)} width={400}>
+              <ModalHeader title="Enroll Member" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Full Name *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} />
+                <Inp label="Email *" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} />
+                <Inp label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
+                <Inp label="Initial Points" value={form.points} onChange={v => setForm(f => ({ ...f, points: +v }))} />
+                <Btn color={T.green} onClick={enrollMember} full>Enroll Member</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  PAYMENTS PAGE
+    // ═══════════════════════════════════════════════════════════
+    function PaymentsPage({bookings, payments, setPayments, addToast, currentUser, settings}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ bookingId: "", method: "card", amount: "", guest: "", ref: "" });
+      
+      const processPayment = () => {
+        if (!form.bookingId || !form.amount) { addToast("Fill required fields", "error"); return; }
+        const booking = bookings.find(b => b.id === +form.bookingId);
+        const payment = {
+          id: `PAY-${Date.now().toString().slice(-6)}`,
+          bookingId: form.bookingId,
+          room: booking?.room,
+          guest: booking?.guest || form.guest,
+          amount: +form.amount,
+          method: form.method,
+          ref: form.ref || `REF${Date.now()}`,
+          status: "completed",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setPayments([payment, ...payments]);
+        setModal(null);
+        setForm({ bookingId: "", method: "card", amount: "", guest: "", ref: "" });
+        addToast(`Payment of ${settings.currency}${payment.amount} processed!`);
+      };
+      
+      const totalReceived = payments.filter(p => p.status === "completed").reduce((s, p) => s + p.amount, 0);
+      const pendingAmount = bookings.filter(b => b.status === "active").reduce((s, b) => s + (b.rate || 0) * (b.nights || 1), 0) - totalReceived;
+      
+      return (
+        <div>
+          <SectionHead>Payment Processing</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 15, marginBottom: 20 }}>
+            <Card style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.green }}>{settings.currency}{totalReceived.toLocaleString()}</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>Total Received</div>
+            </Card>
+            <Card style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.orange }}>{settings.currency}{pendingAmount.toLocaleString()}</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>Pending</div>
+            </Card>
+            <Card style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.blue }}>{payments.length}</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>Transactions</div>
+            </Card>
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ color: T.muted }}>Payment History</div>
+            <Btn color={T.green} onClick={() => setModal("pay")}>+ Process Payment</Btn>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {payments.slice(0, 20).map(p => (
+              <Card key={p.id} style={{ padding: 15 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ color: T.txt, fontWeight: "bold" }}>{p.id} - {p.guest}</div>
+                    <div style={{ color: T.muted, fontSize: 12 }}>{p.at} · {p.method} · Ref: {p.ref}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ color: T.gold, fontWeight: "bold", fontSize: 18 }}>{settings.currency}{p.amount}</div>
+                    <Badge color={p.status === "completed" ? T.green : T.orange}>{p.status}</Badge>
+                  </div>
+                </div>
+              </Card>
+            ))}
+            {payments.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No payments yet</div>}
+          </div>
+          
+          {modal === "pay" && (
+            <Modal onClose={() => setModal(null)} width={450}>
+              <ModalHeader title="Process Payment" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Booking" value={form.bookingId} onChange={v => setForm(f => ({ ...f, bookingId: v }))} options={[{ value: "", label: "Select booking..." }, ...bookings.map(b => ({ value: b.id, label: `${b.room} - ${b.guest}` }))]} />
+                <Inp label="Guest Name" value={form.guest} onChange={v => setForm(f => ({ ...f, guest: v }))} placeholder="If not from booking" />
+                <Inp label="Amount" value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} placeholder="0.00" />
+                <Inp label="Payment Method" value={form.method} onChange={v => setForm(f => ({ ...f, method: v }))} options={[{ value: "card", label: "Credit/Debit Card" }, { value: "cash", label: "Cash" }, { value: "transfer", label: "Bank Transfer" }, { value: "ussd", label: "USSD" }]} />
+                <Inp label="Reference" value={form.ref} onChange={v => setForm(f => ({ ...f, ref: v }))} placeholder="Auto-generated if empty" />
+                <Btn color={T.green} onClick={processPayment} full>Process Payment</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  NOTIFICATIONS PAGE
+    // ═══════════════════════════════════════════════════════════
+    function NotificationsPage({templates, notifications, setNotifications, bookings, addToast, currentUser}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ template: "", bookingId: "", to: "", subject: "", message: "", type: "sms" });
+      
+      const sendNotification = () => {
+        if (!form.to || !form.message) { addToast("Fill required fields", "error"); return; }
+        const templ = templates[form.template];
+        const notif = {
+          id: `NOTIF-${Date.now().toString().slice(-6)}`,
+          template: templ?.label || form.template,
+          to: form.to,
+          subject: form.subject,
+          message: form.message,
+          type: form.type,
+          status: "sent",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setNotifications([notif, ...notifications]);
+        setModal(null);
+        setForm({ template: "", bookingId: "", to: "", subject: "", message: "", type: "sms" });
+        addToast("Notification sent!");
+      };
+      
+      const applyTemplate = (key) => {
+        const templ = templates[key];
+        setForm(f => ({ ...f, template: key, subject: templ?.subject || "", type: templ?.type || "sms" }));
+      };
+      
+      return (
+        <div>
+          <SectionHead>Notifications Center</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 15, marginBottom: 20 }}>
+            <Card style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.blue }}>{notifications.filter(n => n.type === "sms").length}</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>SMS Sent</div>
+            </Card>
+            <Card style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.purple }}>{notifications.filter(n => n.type === "email").length}</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>Emails Sent</div>
+            </Card>
+            <Card style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: "bold", color: T.green }}>{notifications.length}</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>Total Sent</div>
+            </Card>
+          </div>
+          
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <Btn color={T.green} onClick={() => setModal("send")}>+ Send Notification</Btn>
+          </div>
+          
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ color: T.gold, fontSize: 14, marginBottom: 10 }}>Message Templates</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {Object.entries(templates).map(([k, v]) => (
+                <button key={k} onClick={() => applyTemplate(k)} style={{ background: T.s2, border: `1px solid ${T.bdr}`, color: T.txt, padding: "8px 14px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                  {v.type === "email" ? "📧" : "📱"} {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {notifications.map(n => (
+              <Card key={n.id} style={{ padding: 15 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div>
+                    <span style={{ color: T.txt, fontWeight: "bold" }}>{n.template}</span>
+                    <span style={{ color: T.muted, marginLeft: 10 }}>to {n.to}</span>
+                  </div>
+                  <Badge color={n.type === "email" ? T.purple : T.blue}>{n.type}</Badge>
+                </div>
+                <div style={{ color: T.txt, fontSize: 13, marginBottom: 5 }}>{n.message}</div>
+                <div style={{ color: T.muted, fontSize: 11 }}>{n.at}</div>
+              </Card>
+            ))}
+            {notifications.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No notifications sent yet</div>}
+          </div>
+          
+          {modal === "send" && (
+            <Modal onClose={() => setModal(null)} width={500}>
+              <ModalHeader title="Send Notification" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Booking (optional)" value={form.bookingId} onChange={v => { setForm(f => ({ ...f, bookingId: v })); const b = bookings.find(bk => bk.id === +v); if (b) setForm(f => ({ ...f, to: b.phone || b.email || "" })); }} options={[{ value: "", label: "Select booking..." }, ...bookings.map(b => ({ value: b.id, label: `${b.room} - ${b.guest}` }))]} />
+                <Inp label="Recipient *" value={form.to} onChange={v => setForm(f => ({ ...f, to: v }))} placeholder="Phone or email" />
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[{ v: "sms", l: "📱 SMS" }, { v: "email", l: "📧 Email" }].map(opt => (
+                    <button key={opt.v} onClick={() => setForm(f => ({ ...f, type: opt.v }))} style={{ flex: 1, background: form.type === opt.v ? `${T.blue}22` : T.s2, border: `1px solid ${form.type === opt.v ? T.blue : T.bdr}`, color: form.type === opt.v ? T.blue : T.muted, padding: "10px", borderRadius: 6, cursor: "pointer" }}>{opt.l}</button>
+                  ))}
+                </div>
+                <Inp label="Subject" value={form.subject} onChange={v => setForm(f => ({ ...f, subject: v }))} />
+                <div>
+                  <div style={{ color: T.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 5 }}>MESSAGE *</div>
+                  <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} placeholder="Enter your message..." style={{ background: T.s2, border: `1px solid ${T.bdr}`, borderRadius: 7, color: T.txt, padding: "10px 14px", fontSize: 13, width: "100%", minHeight: 100, resize: "vertical", outline: "none" }} />
+                </div>
+                <Btn color={T.green} onClick={sendNotification} full>Send Notification</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  MAINTENANCE PAGE
+    // ═══════════════════════════════════════════════════════════
+    function MaintenancePage({categories, statusLabels, requests, setRequests, rooms, addToast, currentUser}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ room: "", category: "", priority: "medium", description: "", assignedTo: "" });
+      
+      const submitRequest = () => {
+        if (!form.room || !form.category) { addToast("Fill required fields", "error"); return; }
+        const cat = categories[form.category];
+        const room = rooms.find(r => r.id === +form.room);
+        const req = {
+          id: `MNT-${Date.now().toString().slice(-6)}`,
+          room: room?.number,
+          roomId: form.room,
+          category: form.category,
+          categoryLabel: cat?.label,
+          priority: form.priority,
+          description: form.description,
+          assignedTo: form.assignedTo,
+          status: "pending",
+          by: currentUser.name,
+          at: nowStr()
+        };
+        setRequests([req, ...requests]);
+        setModal(null);
+        setForm({ room: "", category: "", priority: "medium", description: "", assignedTo: "" });
+        addToast("Maintenance request submitted!");
+      };
+      
+      const updateStatus = (id, status) => {
+        setRequests(requests.map(r => r.id === id ? { ...r, status } : r));
+        addToast(`Status updated to ${statusLabels[status]?.label}`);
+      };
+      
+      const pendingCount = requests.filter(r => r.status === "pending" || r.status === "in_progress").length;
+      
+      return (
+        <div>
+          <SectionHead>Maintenance Requests</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.orange }}>{requests.filter(r => r.status === "pending").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Pending</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.blue }}>{requests.filter(r => r.status === "in_progress").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>In Progress</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.green }}>{requests.filter(r => r.status === "completed").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Completed</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.red }}>{requests.filter(r => r.priority === "high").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>High Priority</div>
+            </Card>
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ color: T.muted }}>{pendingCount} pending requests</div>
+            <Btn color={T.green} onClick={() => setModal("add")}>+ New Request</Btn>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {requests.map(r => {
+              const cat = categories[r.category];
+              const stat = statusLabels[r.status];
+              return (
+                <Card key={r.id} style={{ padding: 15, borderLeft: `4px solid ${cat?.color || T.muted}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div>
+                      <span style={{ color: T.txt, fontWeight: "bold" }}>{r.id}</span>
+                      <span style={{ color: T.muted, marginLeft: 10 }}>Room {r.room}</span>
+                      <span style={{ color: cat?.color, marginLeft: 10 }}>{cat?.icon} {r.categoryLabel}</span>
+                    </div>
+                    <Badge color={stat?.color || T.muted}>{stat?.label}</Badge>
+                  </div>
+                  <div style={{ color: T.txt, marginBottom: 8 }}>{r.description}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ color: T.muted, fontSize: 11 }}>{r.at} · By {r.by}</div>
+                    {r.status !== "completed" && r.status !== "cancelled" && (
+                      <div style={{ display: "flex", gap: 5 }}>
+                        <Btn sm color={T.blue} onClick={() => updateStatus(r.id, "in_progress")}>Start</Btn>
+                        <Btn sm color={T.green} onClick={() => updateStatus(r.id, "completed")}>Complete</Btn>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+            {requests.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No maintenance requests</div>}
+          </div>
+          
+          {modal === "add" && (
+            <Modal onClose={() => setModal(null)} width={450}>
+              <ModalHeader title="New Maintenance Request" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Room *" value={form.room} onChange={v => setForm(f => ({ ...f, room: v }))} options={[{ value: "", label: "Select room..." }, ...rooms.map(r => ({ value: r.id, label: `Room ${r.number}` }))]} />
+                <Inp label="Category *" value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} options={[{ value: "", label: "Select category..." }, ...Object.entries(categories).map(([k, v]) => ({ value: k, label: `${v.icon} ${v.label}` }))]} />
+                <Inp label="Priority" value={form.priority} onChange={v => setForm(f => ({ ...f, priority: v }))} options={[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }]} />
+                <Inp label="Assigned To" value={form.assignedTo} onChange={v => setForm(f => ({ ...f, assignedTo: v }))} placeholder="Staff member" />
+                <div>
+                  <div style={{ color: T.muted, fontSize: 10, letterSpacing: 1.5, marginBottom: 5 }}>DESCRIPTION</div>
+                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the issue..." style={{ background: T.s2, border: `1px solid ${T.bdr}`, borderRadius: 7, color: T.txt, padding: "10px 14px", fontSize: 13, width: "100%", minHeight: 80, resize: "vertical", outline: "none" }} />
+                </div>
+                <Btn color={T.green} onClick={submitRequest} full>Submit Request</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TASKS PAGE
+    // ═══════════════════════════════════════════════════════════
+    function TasksPage({tasks, setTasks, users, addToast, currentUser}) {
+      const [modal, setModal] = useState(null);
+      const [form, setForm] = useState({ title: "", description: "", priority: "medium", assignee: "", dueDate: "" });
+      const [filter, setFilter] = useState("all");
+      
+      const createTask = () => {
+        if (!form.title || !form.assignee) { addToast("Fill required fields", "error"); return; }
+        const user = users.find(u => u.id === +form.assignee);
+        const task = {
+          id: `TSK-${Date.now().toString().slice(-6)}`,
+          ...form,
+          assigneeName: user?.name,
+          status: "pending",
+          createdBy: currentUser.name,
+          createdAt: nowStr()
+        };
+        setTasks([task, ...tasks]);
+        setModal(null);
+        setForm({ title: "", description: "", priority: "medium", assignee: "", dueDate: "" });
+        addToast("Task created!");
+      };
+      
+      const updateTask = (id, status) => {
+        setTasks(tasks.map(t => t.id === id ? { ...t, status } : t));
+        addToast(`Task ${status}`);
+      };
+      
+      const filtered = filter === "all" ? tasks : tasks.filter(t => t.status === filter);
+      const pendingCount = tasks.filter(t => t.status === "pending").length;
+      
+      return (
+        <div>
+          <SectionHead>Task Management</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.orange }}>{tasks.filter(t => t.status === "pending").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Pending</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.blue }}>{tasks.filter(t => t.status === "in_progress").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>In Progress</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.green }}>{tasks.filter(t => t.status === "completed").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Completed</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.gold }}>{tasks.length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Total Tasks</div>
+            </Card>
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ v: "all", l: "All" }, { v: "pending", l: "Pending" }, { v: "in_progress", l: "In Progress" }, { v: "completed", l: "Completed" }].map(f => (
+                <button key={f.v} onClick={() => setFilter(f.v)} style={{ background: filter === f.v ? `${T.gold}22` : T.s2, border: `1px solid ${filter === f.v ? T.gold : T.bdr}`, color: filter === f.v ? T.gold : T.muted, padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>{f.l}</button>
+              ))}
+            </div>
+            <Btn color={T.green} onClick={() => setModal("add")}>+ Create Task</Btn>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {filtered.map(t => (
+              <Card key={t.id} style={{ padding: 15 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ color: T.txt, fontWeight: "bold" }}>{t.title}</span>
+                    <Badge color={t.priority === "high" ? T.red : t.priority === "medium" ? T.orange : T.muted}>{t.priority}</Badge>
+                  </div>
+                  <Badge color={t.status === "completed" ? T.green : t.status === "in_progress" ? T.blue : T.orange}>{t.status.replace("_", " ")}</Badge>
+                </div>
+                {t.description && <div style={{ color: T.muted, fontSize: 13, marginBottom: 8 }}>{t.description}</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ color: T.muted, fontSize: 11 }}>👤 {t.assigneeName} · Due: {t.dueDate || "N/A"}</div>
+                  {t.status !== "completed" && (
+                    <div style={{ display: "flex", gap: 5 }}>
+                      <Btn sm color={T.blue} onClick={() => updateTask(t.id, "in_progress")}>Start</Btn>
+                      <Btn sm color={T.green} onClick={() => updateTask(t.id, "completed")}>Complete</Btn>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+            {filtered.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.muted }}>No tasks found</div>}
+          </div>
+          
+          {modal === "add" && (
+            <Modal onClose={() => setModal(null)} width={450}>
+              <ModalHeader title="Create Task" onClose={() => setModal(null)} />
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 15 }}>
+                <Inp label="Task Title *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} />
+                <Inp label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} />
+                <Inp label="Priority" value={form.priority} onChange={v => setForm(f => ({ ...f, priority: v }))} options={[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }]} />
+                <Inp label="Assign To *" value={form.assignee} onChange={v => setForm(f => ({ ...f, assignee: v }))} options={[{ value: "", label: "Select staff..." }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
+                <Inp label="Due Date" type="date" value={form.dueDate} onChange={v => setForm(f => ({ ...f, dueDate: v }))} />
+                <Btn color={T.green} onClick={createTask} full>Create Task</Btn>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  AUDIT LOGS PAGE
+    // ═══════════════════════════════════════════════════════════
+    function AuditLogsPage({logs, addToast}) {
+      const [filter, setFilter] = useState("all");
+      
+      const filtered = filter === "all" ? logs : logs.filter(l => l.action === filter);
+      const actionTypes = [...new Set(logs.map(l => l.action))];
+      
+      return (
+        <div>
+          <SectionHead>Audit Logs</SectionHead>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 15, marginBottom: 20 }}>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.gold }}>{logs.length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Total Actions</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.blue }}>{logs.filter(l => l.action === "login").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Logins</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.green }}>{logs.filter(l => l.action === "booking").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Bookings</div>
+            </Card>
+            <Card style={{ padding: 15, textAlign: "center" }}>
+              <div style={{ fontSize: 24, fontWeight: "bold", color: T.purple }}>{logs.filter(l => l.action === "payment").length}</div>
+              <div style={{ color: T.muted, fontSize: 11 }}>Payments</div>
+            </Card>
+          </div>
+          
+          <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+            <button onClick={() => setFilter("all")} style={{ background: filter === "all" ? `${T.gold}22` : T.s2, border: `1px solid ${filter === "all" ? T.gold : T.bdr}`, color: filter === "all" ? T.gold : T.muted, padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>All ({logs.length})</button>
+            {action
